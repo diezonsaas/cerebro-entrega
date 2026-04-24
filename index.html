@@ -142,6 +142,13 @@ button{font-family:'DM Sans',sans-serif;cursor:pointer;border:none;transition:al
       </div>
     </div>
     <div class="card"><div class="card-title">Últimos pedidos</div><div id="dash-lista"><div class="empty">Nenhum pedido hoje.<br>Use a calculadora para começar.</div></div></div>
+    <div class="card" style="border:1px solid rgba(96,165,250,0.3);background:rgba(96,165,250,0.05);">
+      <div class="card-title" style="color:var(--blue);">📂 Importar relatório iFood</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">Solicite o relatório no iFood, baixe o Excel e importe aqui. Processa tudo automaticamente.</div>
+      <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none;" onchange="importarRelatorio(this)">
+      <button class="btn btn-primary" onclick="document.getElementById('import-file').click()" style="background:var(--blue);color:#0d0d0f;">Selecionar arquivo Excel</button>
+      <div id="import-status" style="margin-top:10px;font-size:13px;color:var(--text3);display:none;line-height:1.6;"></div>
+    </div>
   </div>
 
   <div class="page" id="page-calc">
