@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Cérebro de Entrega</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg: #0d0d0f;
+  --bg2: #141417;
+  --bg3: #1a1a1f;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #f0ede8;
+  --text2: #8a8780;
+  --text3: #5a5855;
+  --green: #4ade80;
+  --green-bg: rgba(74,222,128,0.08);
+  --green-border: rgba(74,222,128,0.2);
+  --amber: #fbbf24;
+  --amber-bg: rgba(251,191,36,0.08);
+  --amber-border: rgba(251,191,36,0.2);
+  --red: #f87171;
+  --red-bg: rgba(248,113,113,0.08);
+  --red-border: rgba(248,113,113,0.2);
+  --blue: #60a5fa;
+  --blue-bg: rgba(96,165,250,0.08);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 15px; min-height: 100dvh; }
+input, select, textarea { font-family: 'DM Sans', sans-serif; font-size: 15px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius-sm); padding: 10px 14px; width: 100%; outline: none; transition: border-color .15s; }
+input:focus, select:focus { border-color: var(--blue); }
+select option { background: var(--bg3); }
+button { font-family: 'DM Sans', sans-serif; cursor: pointer; border: none; transition: all .15s; }
+
+/* LAYOUT */
+.app { max-width: 480px; margin: 0 auto; padding: 0 0 100px; }
+.header { padding: 20px 20px 0; display: flex; align-items: center; justify-content: space-between; }
+.logo { font-size: 18px; font-weight: 600; letter-spacing: -.5px; }
+.logo span { color: var(--green); }
+.page { padding: 16px 20px; display: none; }
+.page.active { display: block; }
+
+/* NAV */
+.nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
+.nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; background: none; color: var(--text3); font-size: 10px; font-weight: 500; letter-spacing: .3px; text-transform: uppercase; border-radius: 0; }
+.nav-btn.active { color: var(--green); }
+.nav-icon { font-size: 20px; line-height: 1; }
+
+/* CARDS */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.card-title { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; }
+
+/* MÉTRICAS */
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.metric { background: var(--bg3); border-radius: var(--radius-sm); padding: 12px; }
+.metric-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+.metric-val { font-size: 22px; font-weight: 600; font-family: 'DM Mono', monospace; }
+.metric-val.green { color: var(--green); }
+.metric-val.amber { color: var(--amber); }
+.metric-val.red { color: var(--red); }
+
+/* BADGES */
+.badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+.badge.green { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.badge.amber { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+.badge.red { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+
+/* BOTÕES */
+.btn { width: 100%; padding: 14px; font-size: 15px; font-weight: 500; border-radius: var(--radius-sm); }
+.btn-primary { background: var(--green); color: #0d0d0f; }
+.btn-primary:active { opacity: .85; transform: scale(.98); }
+.btn-secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); margin-top: 8px; }
+.btn-secondary:active { opacity: .8; }
+
+/* CHIP GROUPS */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.chip { padding: 6px 14px; font-size: 13px; font-weight: 500; border-radius: 20px; border: 1px solid var(--border2); background: transparent; color: var(--text2); }
+.chip.active { background: var(--green); color: #0d0d0f; border-color: var(--green); }
+.chip.active-blue { background: var(--blue-bg); color: var(--blue); border-color: var(--blue); }
+
+/* FORM */
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12px; color: var(--text3); margin-bottom: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+
+/* RESULTADO */
+.resultado { border-radius: var(--radius); padding: 20px; text-align: center; margin-bottom: 12px; border: 1px solid; }
+.resultado.green { background: var(--green-bg); border-color: var(--green-border); }
+.resultado.amber { background: var(--amber-bg); border-color: var(--amber-border); }
+.resultado.red { background: var(--red-bg); border-color: var(--red-border); }
+.resultado-emoji { font-size: 36px; margin-bottom: 8px; }
+.resultado-titulo { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.resultado-sub { font-size: 13px; color: var(--text2); }
+
+/* BREAKDOWN */
+.breakdown { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }
+.brow { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; color: var(--text2); border-bottom: 1px solid var(--border); }
+.brow:last-child { border-bottom: none; font-weight: 600; font-size: 14px; color: var(--text); }
+.brow .neg { color: var(--red); }
+.brow .pos { color: var(--green); }
+
+/* LISTA */
+.list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.list-item:last-child { border-bottom: none; }
+.list-title { font-weight: 500; font-size: 14px; }
+.list-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+/* ALERTA */
+.alerta { border-left: 3px solid; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 10px 14px; font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 8px; }
+.alerta.green { border-color: var(--green); background: var(--green-bg); }
+.alerta.amber { border-color: var(--amber); background: var(--amber-bg); }
+.alerta.red { border-color: var(--red); background: var(--red-bg); }
+.alerta.blue { border-color: var(--blue); background: var(--blue-bg); }
+
+/* SLIDER */
+.slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.slider-row label { font-size: 13px; color: var(--text2); min-width: 100px; }
+.slider-row input[type=range] { flex: 1; accent-color: var(--green); }
+.slider-val { font-size: 14px; font-weight: 600; color: var(--green); min-width: 42px; text-align: right; font-family: 'DM Mono', monospace; }
+
+/* PAGE TITLE */
+.page-title { font-size: 24px; font-weight: 600; letter-spacing: -.5px; margin-bottom: 4px; }
+.page-sub { font-size: 13px; color: var(--text3); margin-bottom: 20px; }
+
+/* LOADING */
+.loading { text-align: center; padding: 40px; color: var(--text3); }
+.spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border2); border-top-color: var(--green); border-radius: 50%; animation: spin .7s linear infinite; margin-bottom: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* EMPTY */
+.empty { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 14px; }
+
+/* TABS */
+.tab-row { display: flex; background: var(--bg3); border-radius: var(--radius-sm); padding: 3px; margin-bottom: 16px; gap: 3px; }
+.tab-btn { flex: 1; padding: 8px; font-size: 13px; font-weight: 500; border-radius: 6px; background: transparent; color: var(--text3); }
+.tab-btn.active { background: var(--bg2); color: var(--text); }
+
+/* SECTION HEADER */
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.section-header h2 { font-size: 18px; font-weight: 600; }
+
+/* TOGGLE */
+.toggle-wrap { display: flex; align-items: center; gap: 8px; }
+.toggle { width: 40px; height: 22px; background: var(--border2); border-radius: 11px; position: relative; cursor: pointer; transition: background .2s; border: none; }
+.toggle.on { background: var(--green); }
+.toggle::after { content: ''; position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: transform .2s; }
+.toggle.on::after { transform: translateX(18px); }
+
+/* PRODUTO CARD na ficha */
+.produto-card { background: var(--bg3); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); }
+.produto-nome { font-weight: 600; font-size: 15px; }
+.produto-tamanho { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.produto-cmv { font-size: 13px; color: var(--text2); margin-top: 6px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="logo">Cérebro<span>.</span></div>
+    <div id="loja-badge" style="font-size:12px;color:var(--text3);">Raízes de Açaí</div>
+  </div>
+
+  <!-- PÁGINA: DASHBOARD -->
+  <div class="page active" id="page-dash">
+    <div style="padding-top:16px;">
+      <div class="page-title">Bom dia 👋</div>
+      <div class="page-sub" id="data-hoje"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Resumo de hoje</div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Pedidos</div>
+          <div class="metric-val" id="dash-pedidos">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Lucro acumulado</div>
+          <div class="metric-val green" id="dash-lucro">R$0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Faturado</div>
+          <div class="metric-val" id="dash-faturado">R$0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Margem média</div>
+          <div class="metric-val" id="dash-margem">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Últimos pedidos</div>
+      <div id="dash-lista">
+        <div class="empty">Nenhum pedido registrado hoje.<br>Use a calculadora para começar.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Alerta rápido</div>
+      <div class="alerta blue">Configure os preços atualizados antes de usar a calculadora. Seus preços atuais podem estar desatualizados — confira na aba Cardápio.</div>
+    </div>
+  </div>
+
+  <!-- PÁGINA: CALCULADORA -->
+  <div class="page" id="page-calc">
+    <div style="padding-top:16px;">
+      <div class="page-title">Calculadora</div>
+      <div class="page-sub">Calcule o lucro real por pedido</div>
+    </div>
+
+    <!-- Operação do dia -->
+    <div class="card">
+      <div class="card-title">Operação do dia</div>
+      <div class="slider-row">
+        <label>Diária (R$)</label>
+        <input type="range" id="c-diaria" min="35" max="50" value="35" step="5" oninput="calcAtt()">
+        <span class="slider-val" id="v-diaria">R$35</span>
+      </div>
+      <div class="slider-row">
+        <label>Motoboys</label>
+        <input type="range" id="c-nmoto" min="1" max="2" value="1" step="1" oninput="calcAtt()">
+        <span class="slider-val" id="v-nmoto">1</span>
+      </div>
+      <div class="slider-row">
+        <label>Pedidos/dia</label>
+        <input type="range" id="c-nped" min="5" max="35" value="15" step="1" oninput="calcAtt()">
+        <span class="slider-val" id="v-nped">15</span>
+      </div>
+      <div id="c-info" style="font-size:12px;color:var(--text3);margin-top:4px;"></div>
+    </div>
+
+    <!-- Pedido -->
+    <div class="card">
+      <div class="card-title">Pedido</div>
+
+      <div class="field">
+        <label>Plataforma</label>
+        <div class="chips" id="c-plat-chips">
+          <button class="chip active" onclick="setPlat('ifood',this)">iFood</button>
+          <button class="chip" onclick="setPlat('99food',this)">99Food</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Produto</label>
+        <select id="c-produto" onchange="atualizarPreco()">
+          <option value="">Carregando...</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Preço de venda (R$)</label>
+        <input type="number" id="c-preco" placeholder="Ex: 24,00" min="0" step="0.50">
+      </div>
+
+      <div class="field">
+        <label>Quantidade</label>
+        <input type="number" id="c-qtd" value="1" min="1" max="50">
+      </div>
+
+      <div class="field">
+        <label>Distância</label>
+        <div class="chips" id="c-dist-chips">
+          <button class="chip active" onclick="setDist(0,this)">1km — R$6</button>
+          <button class="chip" onclick="setDist(1,this)">2km — R$7</button>
+          <button class="chip" onclick="setDist(2,this)">3km — R$7,80</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="calcular()">Calcular lucro</button>
+    </div>
+
+    <!-- Resultado -->
+    <div id="c-resultado" style="display:none;">
+      <div id="c-res-box"></div>
+      <div class="card">
+        <div class="breakdown" id="c-breakdown"></div>
+      </div>
+      <button class="btn btn-secondary" onclick="registrarPedido()">+ Registrar no histórico</button>
+    </div>
+  </div>
+
+  <!-- PÁGINA: VALIDADOR -->
+  <div class="page" id="page-valid">
+    <div style="padding-top:16px;">
+      <div class="page-title">Validador</div>
+      <div class="page-sub">Valide promoções antes de aprovar</div>
+    </div>
+
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="setModo('antes',this)">Antes de ativar</button>
+      <button class="tab-btn" onclick="setModo('depois',this)">Campanha rodada</button>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label>Plataforma</label>
+        <div class="chips" id="v-plat-chips">
+          <button class="chip active" onclick="setVPlat('ifood',this)">iFood</button>
+          <button class="chip" onclick="setVPlat('99food',this)">99Food</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Tamanho</label>
+        <div class="chips" id="v-tam-chips">
+          <button class="chip active" onclick="setVTam(330,this)">330ml</button>
+          <button class="chip" onclick="setVTam(550,this)">550ml</button>
+          <button class="chip" onclick="setVTam(770,this)">770ml</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Tipo de desconto</label>
+        <div class="chips" id="v-tipo-chips">
+          <button class="chip active" onclick="setVTipo('frete',this)">🛵 Frete grátis</button>
+          <button class="chip" onclick="setVTipo('fixo',this)">R$ Fixo</button>
+          <button class="chip" onclick="setVTipo('pct',this)">% Off</button>
+        </div>
+      </div>
+
+      <div class="field" id="v-row-frete">
+        <label>Custo do frete (R$)</label>
+        <input type="number" id="v-frete" value="7" min="0" step="0.5">
+      </div>
+      <div class="field" id="v-row-fixo" style="display:none;">
+        <label>Desconto fixo (R$)</label>
+        <input type="number" id="v-fixo" value="5" min="0" step="0.5">
+      </div>
+      <div class="field" id="v-row-pct" style="display:none;">
+        <label>Desconto (%)</label>
+        <input type="number" id="v-pct" value="25" min="0" max="100">
+      </div>
+      <div class="field" id="v-row-limite" style="display:none;">
+        <label>Limite máximo (R$)</label>
+        <input type="number" id="v-limite" value="10" min="0" step="0.5">
+      </div>
+
+      <div class="field">
+        <label>Quem paga</label>
+        <div class="chips" id="v-quem-chips">
+          <button class="chip active" onclick="setVQuem('loja',this)">Minha loja</button>
+          <button class="chip" onclick="setVQuem('plat',this)">Plataforma</button>
+          <button class="chip" onclick="setVQuem('div',this)">Dividido</button>
+        </div>
+      </div>
+
+      <div class="field" id="v-row-pedidos" style="display:none;">
+        <label>Qtd de pedidos na campanha</label>
+        <input type="number" id="v-npedidos" value="50" min="1">
+      </div>
+
+      <button class="btn btn-primary" onclick="validar()">Validar promoção</button>
+    </div>
+
+    <div id="v-resultado" style="display:none;">
+      <div id="v-res-box"></div>
+      <div class="card" id="v-alertas-box"></div>
+    </div>
+
+    <!-- Regras -->
+    <div class="card" style="margin-top:8px;">
+      <div class="card-title">Regras para a gestão</div>
+      <div class="list-item">
+        <div><div class="list-title">Frete grátis — plataforma paga</div><div class="list-sub">iFood ou 99Food cobre 100%</div></div>
+        <span class="badge green">✓ Livre</span>
+      </div>
+      <div class="list-item">
+        <div><div class="list-title">Desconto fixo até R$3</div><div class="list-sub">Ticket acima de R$25</div></div>
+        <span class="badge green">✓ Livre</span>
+      </div>
+      <div class="list-item">
+        <div><div class="list-title">Desconto fixo acima de R$3</div><div class="list-sub">Validar antes de ativar</div></div>
+        <span class="badge amber">⚠ Validar</span>
+      </div>
+      <div class="list-item">
+        <div><div class="list-title">Qualquer % de desconto</div><div class="list-sub">Sempre validar</div></div>
+        <span class="badge amber">⚠ Validar</span>
+      </div>
+      <div class="list-item">
+        <div><div class="list-title">Acúmulo de 2+ promoções</div><div class="list-sub">Nunca permitir</div></div>
+        <span class="badge red">✗ Bloqueado</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PÁGINA: CARDÁPIO -->
+  <div class="page" id="page-cardapio">
+    <div style="padding-top:16px;">
+      <div class="page-title">Cardápio</div>
+      <div class="page-sub">Fichas técnicas e CMV</div>
+    </div>
+
+    <div class="chips" id="tam-filter">
+      <button class="chip active" onclick="filtrarTam(0,this)">Todos</button>
+      <button class="chip" onclick="filtrarTam(330,this)">330ml</button>
+      <button class="chip" onclick="filtrarTam(550,this)">550ml</button>
+      <button class="chip" onclick="filtrarTam(770,this)">770ml</button>
+    </div>
+
+    <div id="cardapio-lista">
+      <div class="loading"><div class="spinner"></div><br>Carregando...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="navTo('dash',this)">
+    <span class="nav-icon">◎</span>
+    <span>Início</span>
+  </button>
+  <button class="nav-btn" onclick="navTo('calc',this)">
+    <span class="nav-icon">⊹</span>
+    <span>Calcular</span>
+  </button>
+  <button class="nav-btn" onclick="navTo('valid',this)">
+    <span class="nav-icon">◈</span>
+    <span>Validar</span>
+  </button>
+  <button class="nav-btn" onclick="navTo('cardapio',this)">
+    <span class="nav-icon">⊞</span>
+    <span>Cardápio</span>
+  </button>
+</nav>
+
+<script>
+// ============================================================
+// CONFIGURAÇÃO SUPABASE
+// ============================================================
+const SUPA_URL = 'https://rmonkrnwtaabfnkmaack.supabase.co';
+const SUPA_KEY = 'sb_publishable_Hx9SOdoMSh4h8mBjCPup2A_wFStx7_q';
+const { createClient } = supabase;
+const db = createClient(SUPA_URL, SUPA_KEY);
+
+const LOJA_ID = '11111111-1111-1111-1111-111111111111';
+const PLAT_IFOOD = '22222222-2222-2222-2222-222222222222';
+const PLAT_99 = '33333333-3333-3333-3333-333333333333';
+
+// CMV médio por tamanho (calculado das fichas técnicas)
+const CMV = { 330: 8.00, 550: 13.50, 770: 19.87 };
+const MOTO_KM = [6, 7, 7.80];
+const TAXAS = { ifood: 0.152, '99food': 0.032 };
+const PRECOS_PADRAO = {
+  ifood: { 330: 24, 550: 33.50, 770: 36.50 },
+  '99food': { 330: 26, 550: 36, 770: 39.99 }
+};
+
+// Estado
+let platAtual = 'ifood';
+let distAtual = 0;
+let vPlatAtual = 'ifood';
+let vTamAtual = 330;
+let vTipoAtual = 'frete';
+let vQuemAtual = 'loja';
+let modoAtual = 'antes';
+let tamFiltro = 0;
+let produtos = [];
+let pedidosHoje = [];
+let _ultimoCalc = null;
+
+const fmt = v => 'R$' + Math.abs(v).toFixed(2).replace('.', ',');
+const fmtS = v => (v < 0 ? '−' : '') + fmt(v);
+
+// ============================================================
+// NAV
+// ============================================================
+function navTo(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  btn.classList.add('active');
+  if (page === 'cardapio') renderCardapio();
+  if (page === 'dash') renderDash();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  // Data
+  const d = new Date();
+  document.getElementById('data-hoje').textContent =
+    d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // Carregar produtos
+  const { data } = await db.from('produtos').select(`
+    id, nome, tamanho_ml,
+    precos(preco, plataforma_id)
+  `).eq('loja_id', LOJA_ID).eq('ativo', true).order('nome').order('tamanho_ml');
+
+  if (data) {
+    produtos = data;
+    renderSelectProdutos();
+    renderCardapio();
+  }
+
+  // Carregar pedidos de hoje
+  const hoje = new Date().toISOString().split('T')[0];
+  const { data: ped } = await db.from('pedidos')
+    .select('*')
+    .eq('loja_id', LOJA_ID)
+    .gte('created_at', hoje + 'T00:00:00')
+    .order('created_at', { ascending: false });
+  if (ped) { pedidosHoje = ped; renderDash(); }
+
+  calcAtt();
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function renderDash() {
+  const h = pedidosHoje;
+  const totalLucro = h.reduce((s, p) => s + p.lucro, 0);
+  const totalFat = h.reduce((s, p) => s + p.preco_venda * p.quantidade, 0);
+  const mediaM = h.length ? h.reduce((s, p) => s + p.margem, 0) / h.length : 0;
+  const cls = totalLucro < 0 ? 'red' : totalLucro < 20 ? 'amber' : 'green';
+
+  document.getElementById('dash-pedidos').textContent = h.length;
+  document.getElementById('dash-lucro').textContent = fmtS(totalLucro);
+  document.getElementById('dash-lucro').className = 'metric-val ' + cls;
+  document.getElementById('dash-faturado').textContent = fmt(totalFat);
+  document.getElementById('dash-margem').textContent = mediaM.toFixed(1) + '%';
+
+  const lista = document.getElementById('dash-lista');
+  if (!h.length) {
+    lista.innerHTML = '<div class="empty">Nenhum pedido registrado hoje.<br>Use a calculadora para começar.</div>';
+    return;
+  }
+  lista.innerHTML = h.slice(0, 5).map(p => {
+    const c = p.lucro < 0 ? 'red' : p.lucro < 4 ? 'amber' : 'green';
+    const hora = new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="list-item">
+      <div>
+        <div class="list-title">${hora} — ${fmt(p.preco_venda)}</div>
+        <div class="list-sub">${p.quantidade}x · ${p.distancia_km}km</div>
+      </div>
+      <span class="badge ${c}">${fmtS(p.lucro)}</span>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// CALCULADORA
+// ============================================================
+function calcAtt() {
+  const d = parseInt(document.getElementById('c-diaria').value) || 35;
+  const n = parseInt(document.getElementById('c-nmoto').value) || 1;
+  const p = parseInt(document.getElementById('c-nped').value) || 15;
+  document.getElementById('v-diaria').textContent = 'R$' + d;
+  document.getElementById('v-nmoto').textContent = n;
+  document.getElementById('v-nped').textContent = p;
+  const cf = (d * n) / p;
+  document.getElementById('c-info').textContent =
+    `Custo fixo/pedido: ${fmt(cf)} (${n} motoboy${n > 1 ? 's' : ''} × R$${d} ÷ ${p} pedidos)`;
+}
+
+function setPlat(p, btn) {
+  platAtual = p;
+  document.querySelectorAll('#c-plat-chips .chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  atualizarPreco();
+}
+
+function setDist(d, btn) {
+  distAtual = d;
+  document.querySelectorAll('#c-dist-chips .chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function renderSelectProdutos() {
+  const sel = document.getElementById('c-produto');
+  const sabores = [...new Set(produtos.map(p => p.nome))];
+  sel.innerHTML = sabores.map(s => {
+    const opts = produtos.filter(p => p.nome === s).map(p =>
+      `<option value="${p.id}" data-tam="${p.tamanho_ml}" data-nome="${p.nome}">${p.tamanho_ml}ml</option>`
+    ).join('');
+    return `<optgroup label="${s}">${opts}</optgroup>`;
+  }).join('');
+  atualizarPreco();
+}
+
+function atualizarPreco() {
+  const sel = document.getElementById('c-produto');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt) return;
+  const prodId = sel.value;
+  const prod = produtos.find(p => p.id === prodId);
+  if (!prod) return;
+  const platId = platAtual === 'ifood' ? PLAT_IFOOD : PLAT_99;
+  const preco = prod.precos?.find(p => p.plataforma_id === platId)?.preco;
+  if (preco) document.getElementById('c-preco').value = preco;
+}
+
+function calcular() {
+  const sel = document.getElementById('c-produto');
+  const prodId = sel.value;
+  const prod = produtos.find(p => p.id === prodId);
+  if (!prod) { alert('Selecione um produto.'); return; }
+
+  const venda = parseFloat(document.getElementById('c-preco').value);
+  const qtd = parseInt(document.getElementById('c-qtd').value) || 1;
+  if (!venda || venda <= 0) { alert('Informe o preço de venda.'); return; }
+
+  const diaria = parseInt(document.getElementById('c-diaria').value) || 35;
+  const nmoto = parseInt(document.getElementById('c-nmoto').value) || 1;
+  const nped = parseInt(document.getElementById('c-nped').value) || 15;
+  const custoFixo = (diaria * nmoto) / nped;
+  const custoMoto = MOTO_KM[distAtual] + custoFixo;
+  const taxa = TAXAS[platAtual];
+  const custo = CMV[prod.tamanho_ml] || 13;
+
+  const recebe = venda * (1 - taxa);
+  const lucroU = recebe - custoMoto - custo;
+  const lucroT = lucroU * qtd;
+  const taxaT = venda * taxa;
+  const margem = (lucroU / venda) * 100;
+
+  let cls, emoji, titulo, sub;
+  if (lucroU < 0) { cls = 'red'; emoji = '🚨'; titulo = 'Prejuízo por pedido'; sub = `Cada pedido perde ${fmtS(lucroU)}`; }
+  else if (lucroU < 4) { cls = 'amber'; emoji = '⚠️'; titulo = 'Margem muito baixa'; sub = 'Qualquer variação pode virar prejuízo'; }
+  else { cls = 'green'; emoji = '✅'; titulo = 'Pedido saudável'; sub = `Margem de ${margem.toFixed(1)}%`; }
+
+  _ultimoCalc = { produto_id: prodId, plataforma_id: platAtual === 'ifood' ? PLAT_IFOOD : PLAT_99,
+    preco_venda: venda, custo_producao: custo, custo_motoboy: custoMoto,
+    taxa_plataforma: taxaT, lucro: lucroT, margem, distancia_km: distAtual + 1, quantidade: qtd,
+    status: lucroU < 0 ? 'prejuizo' : lucroU < 4 ? 'risco' : 'saudavel' };
+
+  document.getElementById('c-resultado').style.display = 'block';
+  document.getElementById('c-res-box').innerHTML = `
+    <div class="resultado ${cls}">
+      <div class="resultado-emoji">${emoji}</div>
+      <div class="resultado-titulo" style="color:var(--${cls})">${titulo}</div>
+      <div class="resultado-sub">${sub}</div>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Lucro/unid.</div><div class="metric-val ${cls}">${fmtS(lucroU)}</div></div>
+      <div class="metric"><div class="metric-label">Lucro total</div><div class="metric-val ${cls}">${fmtS(lucroT)}</div></div>
+      <div class="metric"><div class="metric-label">Margem</div><div class="metric-val ${cls}">${margem.toFixed(1)}%</div></div>
+      <div class="metric"><div class="metric-label">Taxa plat.</div><div class="metric-val">${fmt(taxaT * qtd)}</div></div>
+    </div>`;
+
+  document.getElementById('c-breakdown').innerHTML = `
+    <div class="brow"><span>Venda (${qtd}× ${fmt(venda)})</span><span class="pos">${fmt(venda * qtd)}</span></div>
+    <div class="brow"><span>Taxa ${platAtual === 'ifood' ? 'iFood 15,2%' : '99Food 3,2%'}</span><span class="neg">−${fmt(taxaT * qtd)}</span></div>
+    <div class="brow"><span>Custo produção (CMV)</span><span class="neg">−${fmt(custo * qtd)}</span></div>
+    <div class="brow"><span>Motoboy (${MOTO_KM[distAtual]}km + ${fmt(custoFixo)} diária)</span><span class="neg">−${fmt(custoMoto * qtd)}</span></div>
+    <div class="brow"><span>Lucro líquido</span><span class="${lucroT < 0 ? 'neg' : 'pos'}">${fmtS(lucroT)}</span></div>`;
+
+  document.getElementById('c-resultado').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function registrarPedido() {
+  if (!_ultimoCalc) return;
+  const { error } = await db.from('pedidos').insert({ loja_id: LOJA_ID, ..._ultimoCalc });
+  if (!error) {
+    pedidosHoje.unshift({ ..._ultimoCalc, created_at: new Date().toISOString() });
+    document.getElementById('c-resultado').style.display = 'none';
+    document.getElementById('c-preco').value = '';
+    document.getElementById('c-qtd').value = '1';
+    _ultimoCalc = null;
+    alert('✅ Pedido registrado!');
+  }
+}
+
+// ============================================================
+// VALIDADOR
+// ============================================================
+function setModo(m, btn) {
+  modoAtual = m;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('v-row-pedidos').style.display = m === 'depois' ? 'block' : 'none';
+  document.getElementById('v-resultado').style.display = 'none';
+}
+
+function setVPlat(p, btn) { vPlatAtual = p; document.querySelectorAll('#v-plat-chips .chip').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+function setVTam(t, btn) { vTamAtual = t; document.querySelectorAll('#v-tam-chips .chip').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+function setVQuem(q, btn) { vQuemAtual = q; document.querySelectorAll('#v-quem-chips .chip').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+function setVTipo(t, btn) {
+  vTipoAtual = t;
+  document.querySelectorAll('#v-tipo-chips .chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('v-row-frete').style.display = t === 'frete' ? 'block' : 'none';
+  document.getElementById('v-row-fixo').style.display = t === 'fixo' ? 'block' : 'none';
+  document.getElementById('v-row-pct').style.display = t === 'pct' ? 'block' : 'none';
+  document.getElementById('v-row-limite').style.display = t === 'pct' ? 'block' : 'none';
+}
+
+async function validar() {
+  const platId = vPlatAtual === 'ifood' ? PLAT_IFOOD : PLAT_99;
+  const taxa = TAXAS[vPlatAtual];
+  const custo = CMV[vTamAtual] || 13;
+  const preco = PRECOS_PADRAO[vPlatAtual][vTamAtual];
+  const custoMoto = 7 + 35 / 15; // estimado médio
+
+  let descBruto = 0;
+  if (vTipoAtual === 'frete') descBruto = parseFloat(document.getElementById('v-frete').value) || 7;
+  else if (vTipoAtual === 'fixo') descBruto = parseFloat(document.getElementById('v-fixo').value) || 5;
+  else {
+    const pct = (parseFloat(document.getElementById('v-pct').value) || 25) / 100;
+    const lim = parseFloat(document.getElementById('v-limite').value) || 10;
+    descBruto = Math.min(preco * pct, lim);
+  }
+
+  let descLoja = vQuemAtual === 'loja' ? descBruto : vQuemAtual === 'div' ? descBruto / 2 : 0;
+  let custoFreteAbs = vTipoAtual === 'frete' ? descLoja : 0;
+  const precoEfetivo = vTipoAtual === 'frete' ? preco : preco - descLoja;
+  const recebe = precoEfetivo * (1 - taxa);
+  const lucro = recebe - custoFreteAbs - custoMoto - custo;
+  const lucroSemPromo = preco * (1 - taxa) - custoMoto - custo;
+  const impacto = lucro - lucroSemPromo;
+  const margem = (lucro / precoEfetivo) * 100;
+  const nPed = modoAtual === 'depois' ? (parseInt(document.getElementById('v-npedidos').value) || 50) : 1;
+
+  let cls, emoji, titulo, sub;
+  if (lucro < 0) { cls = 'red'; emoji = '🚨'; titulo = 'REPROVAR — gera prejuízo'; sub = `Cada pedido perde ${fmtS(lucro)}`; }
+  else if (lucro < 4) { cls = 'amber'; emoji = '⚠️'; titulo = 'CUIDADO — margem muito baixa'; sub = 'Qualquer variação pode virar prejuízo'; }
+  else { cls = 'green'; emoji = '✅'; titulo = 'PODE APROVAR'; sub = `Margem positiva de ${fmt(lucro)} por pedido`; }
+
+  document.getElementById('v-resultado').style.display = 'block';
+  document.getElementById('v-res-box').innerHTML = `
+    <div class="resultado ${cls}">
+      <div class="resultado-emoji">${emoji}</div>
+      <div class="resultado-titulo" style="color:var(--${cls})">${titulo}</div>
+      <div class="resultado-sub">${sub}</div>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Lucro/pedido</div><div class="metric-val ${cls}">${fmtS(lucro)}</div></div>
+      <div class="metric"><div class="metric-label">Sem promoção</div><div class="metric-val">${fmtS(lucroSemPromo)}</div></div>
+      <div class="metric"><div class="metric-label">Impacto</div><div class="metric-val red">${fmtS(impacto)}</div></div>
+      ${modoAtual === 'depois' ? `<div class="metric"><div class="metric-label">Impacto total (${nPed} ped.)</div><div class="metric-val red">${fmtS(impacto * nPed)}</div></div>` : ''}
+    </div>`;
+
+  let alertas = '';
+  if (vQuemAtual === 'plat') alertas += `<div class="alerta green">Plataforma pagando — ótimo. Você não paga nada.</div>`;
+  if (descLoja > lucroSemPromo * 0.5) alertas += `<div class="alerta red">Desconto da loja (${fmt(descLoja)}) é mais de 50% do seu lucro. Muito arriscado.</div>`;
+  if (lucro > 0 && lucro < lucroSemPromo) alertas += `<div class="alerta amber">Sem promoção você lucraria ${fmt(lucroSemPromo)}. A promoção reduz ${fmt(Math.abs(impacto))} por pedido.</div>`;
+  document.getElementById('v-alertas-box').innerHTML = alertas || `<div class="alerta blue">Validação concluída. Verifique os números antes de aprovar.</div>`;
+
+  // Salvar validação
+  await db.from('validacoes_promocao').insert({
+    loja_id: LOJA_ID, plataforma_id: platId,
+    tipo_desconto: vTipoAtual, valor_desconto: descBruto,
+    quem_paga: vQuemAtual, lucro_com_promo: lucro,
+    lucro_sem_promo: lucroSemPromo, impacto,
+    veredicto: lucro < 0 ? 'reprovar' : lucro < 4 ? 'cuidado' : 'aprovar',
+    modo: modoAtual
+  });
+
+  document.getElementById('v-resultado').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ============================================================
+// CARDÁPIO
+// ============================================================
+function filtrarTam(tam, btn) {
+  tamFiltro = tam;
+  document.querySelectorAll('#tam-filter .chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCardapio();
+}
+
+function renderCardapio() {
+  const lista = document.getElementById('cardapio-lista');
+  if (!produtos.length) { lista.innerHTML = '<div class="loading"><div class="spinner"></div><br>Carregando...</div>'; return; }
+
+  const filtrados = tamFiltro ? produtos.filter(p => p.tamanho_ml === tamFiltro) : produtos;
+  const sabores = [...new Set(filtrados.map(p => p.nome))];
+
+  lista.innerHTML = sabores.map(sabor => {
+    const items = filtrados.filter(p => p.nome === sabor);
+    return `<div class="card">
+      <div class="card-title">${sabor}</div>
+      ${items.map(p => {
+        const custo = CMV[p.tamanho_ml] || 13;
+        const pIF = p.precos?.find(x => x.plataforma_id === PLAT_IFOOD)?.preco || 0;
+        const p99 = p.precos?.find(x => x.plataforma_id === PLAT_99)?.preco || 0;
+        const cmvIF = pIF > 0 ? ((custo / pIF) * 100).toFixed(0) : 0;
+        const lucIF = pIF > 0 ? pIF * (1 - 0.152) - custo : 0;
+        const luc99 = p99 > 0 ? p99 * (1 - 0.032) - custo : 0;
+        const cls = lucIF < 0 ? 'red' : lucIF < 4 ? 'amber' : 'green';
+        return `<div class="produto-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div class="produto-nome">${p.tamanho_ml}ml</div>
+              <div class="produto-tamanho">Custo produção: ${fmt(custo)}</div>
+            </div>
+            <span class="badge ${cls}">CMV ${cmvIF}%</span>
+          </div>
+          <div class="produto-cmv">
+            <span>iFood ${fmt(pIF)} → lucro <span style="color:var(--${cls})">${fmtS(lucIF)}</span></span>
+            <span>99Food ${fmt(p99)} → lucro <span style="color:var(--green)">${fmtS(luc99)}</span></span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// START
+// ============================================================
+init();
+</script>
+</body>
+</html>
