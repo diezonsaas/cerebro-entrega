@@ -396,8 +396,14 @@ async function importarRelatorio(input) {
       const prodLog = r['PRODUTO LOGISTICO'] || '';
       const dataHora = r['DATA E HORA DO PEDIDO'] || new Date().toISOString();
 
-      // Custo motoboy estimado por distância
-      const custoMoto = distancia <= 1 ? 6 : distancia <= 2 ? 7 : 7.80;
+      // Verificar se é entrega própria ou do iFood
+      const ehEntregaPropria = prodLog.includes('SELF_DELIVERY');
+      
+      // Custo motoboy só para entrega própria
+      let custoMoto = 0;
+      if (ehEntregaPropria) {
+        custoMoto = distancia <= 1 ? 6 : distancia <= 2 ? 7 : 7.80;
+      }
 
       // Lucro real = líquido recebido - custo produção - custo motoboy - incentivo da loja
       const lucro = valorLiquido - CMV_MED - custoMoto - incLoja;
@@ -451,13 +457,19 @@ async function importarRelatorio(input) {
     const totalFat = pedidosParaInserir.reduce((s, p) => s + p.preco_venda, 0);
     const incLojaTotal = pedidosParaInserir.reduce((s, p) => s + (p.incentivo_loja||0), 0);
     const prej = pedidosParaInserir.filter(p => p.status === 'prejuizo').length;
+    const risco = pedidosParaInserir.filter(p => p.status === 'risco').length;
     const saud = pedidosParaInserir.filter(p => p.status === 'saudavel').length;
 
+    const proprios = pedidosParaInserir.filter(p => p.custo_motoboy > 0).length;
+    const plataforma = pedidosParaInserir.filter(p => p.custo_motoboy === 0).length;
+    
     status.style.color = 'var(--green)';
     status.innerHTML = `✅ <strong>${inseridos} pedidos importados!</strong><br>
-      Faturado: ${fmt(totalFat)} · Lucro estimado: ${fmtS(totalLucro)}<br>
-      Incentivo da loja pago: ${fmt(incLojaTotal)}<br>
-      ${saud} saudáveis · ${prej} com prejuízo`;
+      📦 Faturado: <strong>${fmt(totalFat)}</strong><br>
+      💰 Lucro estimado: <strong style="color:${totalLucro<0?'#f87171':'#4ade80'}">${fmtS(totalLucro)}</strong><br>
+      🛵 Entrega própria: ${proprios} pedidos · iFood entrega: ${plataforma}<br>
+      💸 Incentivo da loja pago: <strong style="color:#f87171;">${fmt(incLojaTotal)}</strong><br>
+      ✅ ${saud} saudáveis · ⚠️ ${risco} risco · ❌ ${prej} prejuízo`;
 
     await carregarPedidosHoje();
     input.value = '';
