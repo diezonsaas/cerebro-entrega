@@ -410,7 +410,7 @@ async function carregarAdmInsumos(){
   const{data}=await db.from('insumos').select('*').eq('loja_id',LOJA_ID).order('nome');
   const lista=document.getElementById('adm-insumos-lista');
   if(!data||!data.length){lista.innerHTML='<div class="empty">Nenhum insumo cadastrado.</div>';return;}
-  lista.innerHTML=data.map(i=>`<div class="admin-item"><div class="admin-item-info"><div class="admin-item-name">${i.nome}</div><div class="admin-item-sub">${fmt(i.custo_por_unidade*1000)}/kg · emb. ${fmt(i.preco_embalagem||0)}</div></div><div class="admin-actions"><button class="btn-edit" onclick="editarInsumo('${i.id}','${i.nome.replace(/'/g,"\\'")}','${i.unidade}',${i.preco_embalagem||0},${i.quantidade_embalagem||1})">Editar</button><button class="btn-del" onclick="excluirInsumo('${i.id}')">Excluir</button></div></div>`).join('');
+  lista.innerHTML=data.map(i=>`<div class="admin-item"><div class="admin-item-info"><div class="admin-item-name">${i.nome}</div><div class="admin-item-sub">${fmt(i.custo_por_unidade)}/unid. · emb. ${fmt(i.preco_embalagem||0)}</div></div><div class="admin-actions"><button class="btn-edit" onclick="editarInsumo('${i.id}','${i.nome.replace(/'/g,"\\'")}','${i.unidade}',${i.preco_embalagem||0},${i.quantidade_embalagem||1})">Editar</button><button class="btn-del" onclick="excluirInsumo('${i.id}')">Excluir</button></div></div>`).join('');
 }
 
 function abrirModalProduto(){document.getElementById('mp-id').value='';document.getElementById('mp-nome').value='';document.getElementById('mp-tam').value='330';document.getElementById('mp-cmv').value='';document.getElementById('modal-produto-titulo').textContent='Novo produto';document.getElementById('modal-produto').classList.add('open');}
