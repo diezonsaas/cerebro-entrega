@@ -440,31 +440,62 @@ async function importarRelatorio(input) {
       };
     });
 
+    // Buscar pedidos já existentes no período para evitar duplicatas
+    status.textContent = '⏳ Verificando duplicatas...';
+    const datasImport = pedidosParaInserir.map(p => p.created_at);
+    const dataMin = datasImport.reduce((a,b) => a < b ? a : b);
+    const dataMax = datasImport.reduce((a,b) => a > b ? a : b);
+    
+    const { data: existentes } = await db.from('pedidos')
+      .select('created_at, preco_venda')
+      .eq('loja_id', LOJA_ID)
+      .gte('created_at', dataMin)
+      .lte('created_at', dataMax);
+
+    // Criar set de chaves únicas dos existentes
+    const chavesExistentes = new Set(
+      (existentes || []).map(p => p.created_at + '_' + p.preco_venda)
+    );
+
+    // Filtrar só os que não existem ainda
+    const novos = pedidosParaInserir.filter(p => 
+      !chavesExistentes.has(p.created_at + '_' + p.preco_venda)
+    );
+
+    if (novos.length === 0) {
+      status.style.color = 'var(--amber)';
+      status.innerHTML = '⚠️ Todos os pedidos deste relatório já foram importados anteriormente.';
+      input.value = '';
+      return;
+    }
+
     // Inserir em lotes de 50
     let inseridos = 0;
     const loteSize = 50;
-    for (let i = 0; i < pedidosParaInserir.length; i += loteSize) {
-      const lote = pedidosParaInserir.slice(i, i + loteSize);
-      // Remover campos extras que não existem na tabela ainda
+    for (let i = 0; i < novos.length; i += loteSize) {
+      const lote = novos.slice(i, i + loteSize);
       const loteClean = lote.map(({incentivo_loja, incentivo_ifood, frete_cliente, valor_liquido, ...rest}) => rest);
       const { error } = await db.from('pedidos').insert(loteClean);
       if (!error) inseridos += lote.length;
-      status.textContent = `⏳ Inserindo... ${Math.min(i + loteSize, pedidosParaInserir.length)} de ${pedidosParaInserir.length}`;
+      status.textContent = `⏳ Inserindo... ${Math.min(i + loteSize, novos.length)} de ${novos.length}`;
     }
+    
+    const duplicatas = pedidosParaInserir.length - novos.length;
 
     // Resumo do que foi importado
-    const totalLucro = pedidosParaInserir.reduce((s, p) => s + p.lucro, 0);
-    const totalFat = pedidosParaInserir.reduce((s, p) => s + p.preco_venda, 0);
-    const incLojaTotal = pedidosParaInserir.reduce((s, p) => s + (p.incentivo_loja||0), 0);
-    const prej = pedidosParaInserir.filter(p => p.status === 'prejuizo').length;
-    const risco = pedidosParaInserir.filter(p => p.status === 'risco').length;
-    const saud = pedidosParaInserir.filter(p => p.status === 'saudavel').length;
+    const totalLucro = novos.reduce((s, p) => s + p.lucro, 0);
+    const totalFat = novos.reduce((s, p) => s + p.preco_venda, 0);
+    const incLojaTotal = novos.reduce((s, p) => s + (p.incentivo_loja||0), 0);
+    const prej = novos.filter(p => p.status === 'prejuizo').length;
+    const risco = novos.filter(p => p.status === 'risco').length;
+    const saud = novos.filter(p => p.status === 'saudavel').length;
 
-    const proprios = pedidosParaInserir.filter(p => p.custo_motoboy > 0).length;
-    const plataforma = pedidosParaInserir.filter(p => p.custo_motoboy === 0).length;
+    const proprios = novos.filter(p => p.custo_motoboy > 0).length;
+    const plataforma = novos.filter(p => p.custo_motoboy === 0).length;
     
     status.style.color = 'var(--green)';
-    status.innerHTML = `✅ <strong>${inseridos} pedidos importados!</strong><br>
+    const msgDup = duplicatas > 0 ? `<br>⏭️ ${duplicatas} pedidos ignorados (já existiam)` : '';
+    status.innerHTML = `✅ <strong>${inseridos} pedidos importados!</strong>${msgDup}<br>
       📦 Faturado: <strong>${fmt(totalFat)}</strong><br>
       💰 Lucro estimado: <strong style="color:${totalLucro<0?'#f87171':'#4ade80'}">${fmtS(totalLucro)}</strong><br>
       🛵 Entrega própria: ${proprios} pedidos · iFood entrega: ${plataforma}<br>
