@@ -481,6 +481,167 @@ async function importarRelatorio(input) {
   }
 }
 
+
+// ===== ANÁLISE =====
+let periodoAtual = 30;
+
+function setPeriodo(dias, btn) {
+  periodoAtual = dias;
+  document.querySelectorAll('.periodo-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarAnalise();
+}
+
+function renderAnaliseVazio() {
+  ['an-pedidos','an-lucro','an-fat','an-margem'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = '—';
+  });
+  const cd = document.getElementById('chart-dias');
+  if(cd) cd.innerHTML = '';
+  const ce = document.getElementById('chart-dias-empty');
+  if(ce) ce.style.display = 'block';
+  const dm = document.getElementById('donut-main');
+  if(dm) dm.innerHTML = '<div class="empty">Importe um relatório para ver os gráficos.</div>';
+  const pi = document.getElementById('plat-if-lucro');
+  if(pi) pi.textContent = '—';
+  const p9 = document.getElementById('plat-99-lucro');
+  if(p9) p9.textContent = '—';
+}
+
+async function carregarAnalise() {
+  // Busca todos os pedidos disponíveis
+  const { data: todos, error } = await db.from('pedidos')
+    .select('*')
+    .eq('loja_id', LOJA_ID)
+    .order('created_at', { ascending: true });
+
+  if (error || !todos || todos.length === 0) {
+    renderAnaliseVazio();
+    return;
+  }
+
+  // Pega a data mais recente dos dados e filtra pelo período
+  const ultimaData = new Date(todos[todos.length - 1].created_at);
+  const inicioFiltro = new Date(ultimaData);
+  inicioFiltro.setDate(inicioFiltro.getDate() - periodoAtual);
+  const data = todos.filter(p => new Date(p.created_at) >= inicioFiltro);
+
+  if (!data.length) {
+    renderAnaliseVazio();
+    return;
+  }
+
+  const ce = document.getElementById('chart-dias-empty');
+  if(ce) ce.style.display = 'none';
+
+  // Métricas resumo
+  const totalLucro = data.reduce((s, p) => s + p.lucro, 0);
+  const totalFat = data.reduce((s, p) => s + p.preco_venda * p.quantidade, 0);
+  const margem = data.reduce((s, p) => s + p.margem, 0) / data.length;
+
+  document.getElementById('an-pedidos').textContent = data.length;
+  const elLucro = document.getElementById('an-lucro');
+  elLucro.textContent = fmtS(totalLucro);
+  elLucro.className = 'metric-val ' + (totalLucro < 0 ? 'red' : totalLucro < 50 ? 'amber' : 'green');
+  document.getElementById('an-fat').textContent = fmt(totalFat);
+  document.getElementById('an-margem').textContent = margem.toFixed(1) + '%';
+
+  // Gráfico de barras por dia
+  const porDia = {};
+  data.forEach(p => {
+    const d = new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    if (!porDia[d]) porDia[d] = { lucro: 0, pedidos: 0 };
+    porDia[d].lucro += p.lucro;
+    porDia[d].pedidos += 1;
+  });
+
+  const dias_arr = Object.keys(porDia);
+  const lucros = dias_arr.map(d => porDia[d].lucro);
+  const maxAbs = Math.max(...lucros.map(Math.abs), 1);
+
+  const chartEl = document.getElementById('chart-dias');
+  if (chartEl) {
+    chartEl.innerHTML = dias_arr.map(d => {
+      const l = porDia[d].lucro;
+      const h = Math.max(Math.round((Math.abs(l) / maxAbs) * 90), 3);
+      const cor = l < 0 ? '#f87171' : l < 10 ? '#fbbf24' : '#4ade80';
+      const valStr = Math.abs(l) >= 100 ? Math.round(l) : l.toFixed(0);
+      return `<div class="bar-col">
+        <div class="bar-val">${valStr}</div>
+        <div class="bar-fill-wrap"><div class="bar" style="height:${h}px;background:${cor};opacity:0.85;width:100%;"></div></div>
+        <div class="bar-label">${d}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Comparativo plataformas
+  const ifPed = data.filter(p => p.plataforma_id === PLAT_IFOOD);
+  const p99Ped = data.filter(p => p.plataforma_id === PLAT_99);
+  const ifLucro = ifPed.reduce((s, p) => s + p.lucro, 0);
+  const p99Lucro = p99Ped.reduce((s, p) => s + p.lucro, 0);
+  const ifMargem = ifPed.length ? ifPed.reduce((s, p) => s + p.margem, 0) / ifPed.length : 0;
+  const p99Margem = p99Ped.length ? p99Ped.reduce((s, p) => s + p.margem, 0) / p99Ped.length : 0;
+
+  const eilf = document.getElementById('plat-if-lucro');
+  if(eilf){ eilf.textContent = fmtS(ifLucro); eilf.style.color = ifLucro < 0 ? '#f87171' : '#4ade80'; }
+  const eifp = document.getElementById('plat-if-ped');
+  if(eifp) eifp.textContent = ifPed.length + ' pedidos';
+  const eifm = document.getElementById('plat-if-margem');
+  if(eifm) eifm.textContent = ifMargem.toFixed(1) + '% margem média';
+
+  const e99l = document.getElementById('plat-99-lucro');
+  if(e99l){ e99l.textContent = fmtS(p99Lucro); e99l.style.color = p99Lucro < 0 ? '#f87171' : '#4ade80'; }
+  const e99p = document.getElementById('plat-99-ped');
+  if(e99p) e99p.textContent = p99Ped.length + ' pedidos';
+  const e99m = document.getElementById('plat-99-margem');
+  if(e99m) e99m.textContent = p99Margem.toFixed(1) + '% margem média';
+
+  const insight = document.getElementById('plat-insight');
+  if(insight) {
+    if(ifPed.length && p99Ped.length) {
+      const melhor = p99Margem > ifMargem ? '99Food' : 'iFood';
+      const diff = Math.abs(p99Margem - ifMargem).toFixed(1);
+      insight.textContent = melhor + ' teve ' + diff + '% de margem maior neste período.';
+    } else {
+      insight.textContent = !p99Ped.length ? 'Nenhum pedido do 99Food neste período.' : 'Nenhum pedido do iFood neste período.';
+    }
+  }
+
+  // Donut status
+  const saud = data.filter(p => p.status === 'saudavel').length;
+  const risco = data.filter(p => p.status === 'risco').length;
+  const prej = data.filter(p => p.status === 'prejuizo').length;
+  const total = data.length;
+  const pS = Math.round((saud/total)*100);
+  const pR = Math.round((risco/total)*100);
+  const pP = Math.round((prej/total)*100);
+
+  function arco(pct, offset, cor) {
+    const r=40,cx=50,cy=50,circ=2*Math.PI*r;
+    const dash=(pct/100)*circ,gap=circ-dash;
+    const rot=(offset/100)*360-90;
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${cor}" stroke-width="14" stroke-dasharray="${dash} ${gap}" transform="rotate(${rot} ${cx} ${cy})"/>`;
+  }
+
+  const svg = `<svg viewBox="0 0 100 100" width="110" height="110">
+    <circle cx="50" cy="50" r="40" fill="none" stroke="#1a1a1f" stroke-width="14"/>
+    ${pS>0?arco(pS,0,'#4ade80'):''}
+    ${pR>0?arco(pR,pS,'#fbbf24'):''}
+    ${pP>0?arco(pP,pS+pR,'#f87171'):''}
+    <text x="50" y="46" text-anchor="middle" font-size="14" font-weight="600" fill="#f0ede8" font-family="DM Sans">${total}</text>
+    <text x="50" y="60" text-anchor="middle" font-size="8" fill="#5a5855" font-family="DM Sans">pedidos</text>
+  </svg>`;
+
+  const dm = document.getElementById('donut-main');
+  if(dm) dm.innerHTML = `<div class="donut-wrap">${svg}
+    <div class="donut-legend">
+      <div class="donut-item"><div class="donut-dot" style="background:#4ade80;"></div><span class="donut-name">Saudável</span><span class="donut-pct" style="color:#4ade80;">${saud} (${pS}%)</span></div>
+      <div class="donut-item"><div class="donut-dot" style="background:#fbbf24;"></div><span class="donut-name">Risco</span><span class="donut-pct" style="color:#fbbf24;">${risco} (${pR}%)</span></div>
+      <div class="donut-item"><div class="donut-dot" style="background:#f87171;"></div><span class="donut-name">Prejuízo</span><span class="donut-pct" style="color:#f87171;">${prej} (${pP}%)</span></div>
+    </div></div>`;
+}
+
 function navTo(p,btn){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');btn.classList.add('active');if(p==='cardapio')renderCardapio();if(p==='dash')renderDash();if(p==='admin')carregarAdmin();if(p==='analise')carregarAnalise();}
 
 function entrarAdmin(btn){if(adminLogado){navTo('admin',btn);return;}document.getElementById('login-admin').style.display='flex';document.getElementById('admin-senha').value='';document.getElementById('login-erro').style.display='none';setTimeout(()=>document.getElementById('admin-senha').focus(),100);}
