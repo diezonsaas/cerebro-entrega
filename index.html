@@ -286,11 +286,144 @@ button{font-family:'DM Sans',sans-serif;cursor:pointer;border:none;transition:al
     </div>
   </div>
 
+
+  <!-- CAIXA -->
+  <div class="page" id="page-caixa">
+    <div style="padding-top:16px;">
+      <div class="page-title">Caixa</div>
+      <div class="page-sub">Fluxo financeiro das duas lojas</div>
+    </div>
+
+    <!-- Saldo -->
+    <div class="card" id="caixa-saldo-card" style="text-align:center;padding:24px 16px;">
+      <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Saldo atual</div>
+      <div id="caixa-saldo" style="font-size:42px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green);">R$0</div>
+      <div id="caixa-saldo-sub" style="font-size:12px;color:var(--text3);margin-top:4px;"></div>
+    </div>
+
+    <!-- Período -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;">
+      <button class="periodo-chip active" onclick="setCaixaPeriodo('hoje',this)">Hoje</button>
+      <button class="periodo-chip" onclick="setCaixaPeriodo('semana',this)">Semana</button>
+      <button class="periodo-chip" onclick="setCaixaPeriodo('mes',this)">Mês</button>
+    </div>
+
+    <!-- DRE Simplificada -->
+    <div class="card">
+      <div class="card-title">DRE — Resultado do período</div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">Receita total</div><div class="metric-val green" id="dre-receita">R$0</div></div>
+        <div class="metric"><div class="metric-label">CMV (insumos)</div><div class="metric-val red" id="dre-cmv">R$0</div></div>
+        <div class="metric"><div class="metric-label">Custos operacionais</div><div class="metric-val red" id="dre-op">R$0</div></div>
+        <div class="metric"><div class="metric-label">Lucro líquido</div><div class="metric-val" id="dre-lucro">R$0</div></div>
+      </div>
+      <div id="dre-barra" style="height:8px;border-radius:4px;background:var(--bg3);margin-top:4px;overflow:hidden;">
+        <div id="dre-barra-fill" style="height:100%;border-radius:4px;background:var(--green);width:0%;transition:width .5s;"></div>
+      </div>
+      <div id="dre-margem-txt" style="font-size:12px;color:var(--text3);margin-top:6px;text-align:center;"></div>
+    </div>
+
+    <!-- Ações rápidas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+      <button class="btn btn-primary" onclick="abrirLancamento('entrada')" style="padding:12px;">+ Entrada</button>
+      <button class="btn" onclick="abrirLancamento('saida')" style="padding:12px;background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);">− Saída</button>
+    </div>
+
+    <!-- Histórico por categoria -->
+    <div class="card">
+      <div class="card-title">Por categoria</div>
+      <div id="caixa-categorias"><div class="empty">Nenhum lançamento ainda.</div></div>
+    </div>
+
+    <!-- Histórico -->
+    <div class="card">
+      <div class="card-title">Lançamentos recentes</div>
+      <div id="caixa-historico"><div class="empty">Nenhum lançamento ainda.</div></div>
+    </div>
+
+    <!-- Custos fixos -->
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Custos fixos mensais</span>
+        <button class="btn-add" onclick="abrirCustoFixo()">+ Adicionar</button>
+      </div>
+      <div class="alerta blue" style="margin-bottom:12px;">Cadastre seus custos fixos aqui. Eles aparecem na DRE todo mês automaticamente.</div>
+      <div id="custos-fixos-lista"><div class="empty">Nenhum custo fixo cadastrado.</div></div>
+    </div>
+  </div>
+
+
+<!-- MODAL LANÇAMENTO -->
+<div class="modal-overlay" id="modal-lancamento">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-lanc-titulo">Novo lançamento</span>
+      <button class="modal-close" onclick="fecharModal('modal-lancamento')">×</button>
+    </div>
+    <input type="hidden" id="lanc-tipo">
+    <div class="field">
+      <label>Categoria</label>
+      <select id="lanc-categoria" onchange="atualizarCategorias()">
+        <option value="">Selecione...</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Descrição (opcional)</label>
+      <input type="text" id="lanc-desc" placeholder="Ex: Compra açaí fornecedor X">
+    </div>
+    <div class="field">
+      <label>Valor (R$)</label>
+      <input type="number" id="lanc-valor" placeholder="0,00" min="0" step="0.01">
+    </div>
+    <div class="field">
+      <label>Data</label>
+      <input type="date" id="lanc-data">
+    </div>
+    <button class="btn btn-primary" onclick="salvarLancamento()">Salvar lançamento</button>
+    <button class="btn btn-secondary" onclick="fecharModal('modal-lancamento')">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL CUSTO FIXO -->
+<div class="modal-overlay" id="modal-custo-fixo">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Custo fixo mensal</span>
+      <button class="modal-close" onclick="fecharModal('modal-custo-fixo')">×</button>
+    </div>
+    <input type="hidden" id="cf-id">
+    <div class="field">
+      <label>Nome</label>
+      <input type="text" id="cf-nome" placeholder="Ex: Conta de luz">
+    </div>
+    <div class="field">
+      <label>Categoria</label>
+      <select id="cf-categoria">
+        <option value="pessoal">Pessoal (motoboy, gestão)</option>
+        <option value="operacional">Operacional (luz, internet, aluguel)</option>
+        <option value="transporte">Transporte (gasolina)</option>
+        <option value="marketing">Marketing (chip maquininha, taxas)</option>
+        <option value="outros">Outros</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Valor mensal (R$)</label>
+      <input type="number" id="cf-valor" placeholder="0,00" min="0" step="0.01">
+    </div>
+    <div class="field">
+      <label>Dia do vencimento</label>
+      <input type="number" id="cf-dia" placeholder="Ex: 10" min="1" max="31">
+    </div>
+    <button class="btn btn-primary" onclick="salvarCustoFixo()">Salvar</button>
+    <button class="btn btn-secondary" onclick="fecharModal('modal-custo-fixo')">Cancelar</button>
+  </div>
+</div>
+
 <nav class="nav">
   <button class="nav-btn active" onclick="navTo('dash',this)"><span class="nav-icon">◎</span><span>Início</span></button>
   <button class="nav-btn" onclick="navTo('calc',this)"><span class="nav-icon">⊹</span><span>Calcular</span></button>
+  <button class="nav-btn" onclick="navTo('caixa',this)"><span class="nav-icon">💰</span><span>Caixa</span></button>
   <button class="nav-btn" onclick="navTo('analise',this)"><span class="nav-icon">📊</span><span>Análise</span></button>
-  <button class="nav-btn" onclick="navTo('cardapio',this)"><span class="nav-icon">⊞</span><span>Cardápio</span></button>
   <button class="nav-btn" onclick="entrarAdmin(this)"><span class="nav-icon">⚙</span><span>Admin</span></button>
 </nav>
 
@@ -673,7 +806,233 @@ async function carregarAnalise() {
     </div></div>`;
 }
 
-function navTo(p,btn){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');btn.classList.add('active');if(p==='cardapio')renderCardapio();if(p==='dash')renderDash();if(p==='admin')carregarAdmin();if(p==='analise')carregarAnalise();}
+
+// ===== CAIXA =====
+let caixaPeriodo = 'hoje';
+
+const CATEGORIAS_ENTRADA = [
+  { value: 'repasse_ifood', label: 'Repasse iFood' },
+  { value: 'repasse_99food', label: 'Repasse 99Food' },
+  { value: 'venda_direta', label: 'Venda direta (pix/dinheiro)' },
+  { value: 'outros_entrada', label: 'Outros' },
+];
+
+const CATEGORIAS_SAIDA = [
+  { value: 'insumo_acai', label: 'Insumo — Açaí' },
+  { value: 'insumo_outros', label: 'Insumo — Outros (cremes, frutas)' },
+  { value: 'embalagem', label: 'Embalagem' },
+  { value: 'motoboy', label: 'Pessoal — Motoboy (diária)' },
+  { value: 'gestao', label: 'Pessoal — Gestão' },
+  { value: 'luz', label: 'Operacional — Luz' },
+  { value: 'internet', label: 'Operacional — Internet' },
+  { value: 'aluguel', label: 'Operacional — Aluguel' },
+  { value: 'gasolina', label: 'Transporte — Gasolina' },
+  { value: 'chip_maquininha', label: 'Marketing — Chip/Maquininha' },
+  { value: 'taxa_plataforma', label: 'Marketing — Taxa plataforma' },
+  { value: 'outros_saida', label: 'Outros' },
+];
+
+function setCaixaPeriodo(p, btn) {
+  caixaPeriodo = p;
+  document.querySelectorAll('.periodo-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarCaixa();
+}
+
+function getPeriodoFiltro() {
+  const hoje = new Date();
+  if (caixaPeriodo === 'hoje') {
+    return hoje.toISOString().split('T')[0];
+  } else if (caixaPeriodo === 'semana') {
+    const d = new Date(hoje);
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  } else {
+    const d = new Date(hoje);
+    d.setDate(1);
+    return d.toISOString().split('T')[0];
+  }
+}
+
+async function carregarCaixa() {
+  const inicio = getPeriodoFiltro();
+  
+  const { data } = await db.from('caixa')
+    .select('*')
+    .gte('data', inicio)
+    .order('created_at', { ascending: false });
+
+  const lancamentos = data || [];
+
+  // Saldo total (todos os tempos)
+  const { data: todos } = await db.from('caixa').select('tipo, valor');
+  const saldoTotal = (todos || []).reduce((s, l) => 
+    l.tipo === 'entrada' ? s + l.valor : s - l.valor, 0);
+
+  // Saldo card
+  const saldoEl = document.getElementById('caixa-saldo');
+  saldoEl.textContent = fmtS(saldoTotal);
+  saldoEl.style.color = saldoTotal < 0 ? 'var(--red)' : saldoTotal < 100 ? 'var(--amber)' : 'var(--green)';
+  
+  const periodoLabel = caixaPeriodo === 'hoje' ? 'hoje' : caixaPeriodo === 'semana' ? 'últimos 7 dias' : 'este mês';
+  document.getElementById('caixa-saldo-sub').textContent = `Movimentações: ${periodoLabel}`;
+
+  // DRE do período
+  const entradas = lancamentos.filter(l => l.tipo === 'entrada');
+  const saidas = lancamentos.filter(l => l.tipo === 'saida');
+  const totalEntrada = entradas.reduce((s, l) => s + l.valor, 0);
+  const totalCMV = saidas.filter(l => l.categoria.startsWith('insumo') || l.categoria === 'embalagem').reduce((s, l) => s + l.valor, 0);
+  const totalOp = saidas.filter(l => !l.categoria.startsWith('insumo') && l.categoria !== 'embalagem').reduce((s, l) => s + l.valor, 0);
+  const lucroLiq = totalEntrada - totalCMV - totalOp;
+  const margemLiq = totalEntrada > 0 ? (lucroLiq / totalEntrada * 100) : 0;
+
+  document.getElementById('dre-receita').textContent = fmt(totalEntrada);
+  document.getElementById('dre-cmv').textContent = fmt(totalCMV);
+  document.getElementById('dre-op').textContent = fmt(totalOp);
+  const dreEl = document.getElementById('dre-lucro');
+  dreEl.textContent = fmtS(lucroLiq);
+  dreEl.className = 'metric-val ' + (lucroLiq < 0 ? 'red' : lucroLiq < 50 ? 'amber' : 'green');
+
+  const barraWidth = totalEntrada > 0 ? Math.max(0, Math.min(100, margemLiq)) : 0;
+  document.getElementById('dre-barra-fill').style.width = barraWidth + '%';
+  document.getElementById('dre-barra-fill').style.background = lucroLiq < 0 ? 'var(--red)' : lucroLiq < 50 ? 'var(--amber)' : 'var(--green)';
+  document.getElementById('dre-margem-txt').textContent = totalEntrada > 0 ? `Margem líquida: ${margemLiq.toFixed(1)}%` : '';
+
+  // Por categoria
+  const porCat = {};
+  lancamentos.forEach(l => {
+    const key = l.tipo + '_' + l.categoria;
+    if (!porCat[key]) porCat[key] = { tipo: l.tipo, categoria: l.categoria, total: 0, count: 0 };
+    porCat[key].total += l.valor;
+    porCat[key].count += 1;
+  });
+
+  const getCatLabel = (tipo, cat) => {
+    const lista = tipo === 'entrada' ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA;
+    return lista.find(c => c.value === cat)?.label || cat;
+  };
+
+  const catEl = document.getElementById('caixa-categorias');
+  if (!Object.keys(porCat).length) {
+    catEl.innerHTML = '<div class="empty">Nenhum lançamento no período.</div>';
+  } else {
+    catEl.innerHTML = Object.values(porCat)
+      .sort((a, b) => b.total - a.total)
+      .map(c => `
+        <div class="list-item">
+          <div>
+            <div class="list-title">${getCatLabel(c.tipo, c.categoria)}</div>
+            <div class="list-sub">${c.count} lançamento${c.count > 1 ? 's' : ''}</div>
+          </div>
+          <span style="font-weight:600;color:${c.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">
+            ${c.tipo === 'entrada' ? '+' : '−'}${fmt(c.total)}
+          </span>
+        </div>`).join('');
+  }
+
+  // Histórico
+  const histEl = document.getElementById('caixa-historico');
+  if (!lancamentos.length) {
+    histEl.innerHTML = '<div class="empty">Nenhum lançamento no período.</div>';
+  } else {
+    histEl.innerHTML = lancamentos.slice(0, 20).map(l => {
+      const label = getCatLabel(l.tipo, l.categoria);
+      const data = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      return `<div class="list-item">
+        <div>
+          <div class="list-title">${l.descricao || label}</div>
+          <div class="list-sub">${label} · ${data}</div>
+        </div>
+        <span style="font-weight:600;color:${l.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">
+          ${l.tipo === 'entrada' ? '+' : '−'}${fmt(l.valor)}
+        </span>
+      </div>`;
+    }).join('');
+  }
+
+  // Custos fixos
+  carregarCustosFixos();
+}
+
+async function carregarCustosFixos() {
+  const { data } = await db.from('custos_fixos').select('*').eq('ativo', true).order('nome');
+  const el = document.getElementById('custos-fixos-lista');
+  if (!data || !data.length) {
+    el.innerHTML = '<div class="empty">Nenhum custo fixo cadastrado.</div>';
+    return;
+  }
+  const total = data.reduce((s, c) => s + c.valor, 0);
+  el.innerHTML = data.map(c => `
+    <div class="list-item">
+      <div>
+        <div class="list-title">${c.nome}</div>
+        <div class="list-sub">${c.categoria} · vence dia ${c.dia_vencimento || '—'}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-weight:600;color:var(--red);">${fmt(c.valor)}</div>
+        <button class="btn-del" style="margin-top:4px;" onclick="excluirCustoFixo('${c.id}')">Excluir</button>
+      </div>
+    </div>`).join('') + 
+    `<div style="display:flex;justify-content:space-between;padding:10px 0;font-weight:600;border-top:1px solid var(--border);margin-top:4px;">
+      <span>Total mensal fixo</span>
+      <span style="color:var(--red);">${fmt(total)}</span>
+    </div>`;
+}
+
+function abrirLancamento(tipo) {
+  document.getElementById('lanc-tipo').value = tipo;
+  document.getElementById('modal-lanc-titulo').textContent = tipo === 'entrada' ? '+ Nova entrada' : '− Nova saída';
+  const sel = document.getElementById('lanc-categoria');
+  const lista = tipo === 'entrada' ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA;
+  sel.innerHTML = '<option value="">Selecione...</option>' + lista.map(c => `<option value="${c.value}">${c.label}</option>`).join('');
+  document.getElementById('lanc-valor').value = '';
+  document.getElementById('lanc-desc').value = '';
+  document.getElementById('lanc-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-lancamento').classList.add('open');
+}
+
+async function salvarLancamento() {
+  const tipo = document.getElementById('lanc-tipo').value;
+  const categoria = document.getElementById('lanc-categoria').value;
+  const descricao = document.getElementById('lanc-desc').value;
+  const valor = parseFloat(document.getElementById('lanc-valor').value);
+  const data = document.getElementById('lanc-data').value;
+  if (!categoria) { alert('Selecione uma categoria.'); return; }
+  if (!valor || valor <= 0) { alert('Informe o valor.'); return; }
+  const { error } = await db.from('caixa').insert({ tipo, categoria, descricao, valor, data });
+  if (!error) {
+    fecharModal('modal-lancamento');
+    await carregarCaixa();
+  }
+}
+
+function abrirCustoFixo() {
+  document.getElementById('cf-id').value = '';
+  document.getElementById('cf-nome').value = '';
+  document.getElementById('cf-valor').value = '';
+  document.getElementById('cf-dia').value = '';
+  document.getElementById('modal-custo-fixo').classList.add('open');
+}
+
+async function salvarCustoFixo() {
+  const nome = document.getElementById('cf-nome').value.trim();
+  const categoria = document.getElementById('cf-categoria').value;
+  const valor = parseFloat(document.getElementById('cf-valor').value);
+  const dia = parseInt(document.getElementById('cf-dia').value) || null;
+  if (!nome) { alert('Digite o nome.'); return; }
+  if (!valor || valor <= 0) { alert('Informe o valor.'); return; }
+  await db.from('custos_fixos').insert({ nome, categoria, valor, dia_vencimento: dia });
+  fecharModal('modal-custo-fixo');
+  await carregarCustosFixos();
+}
+
+async function excluirCustoFixo(id) {
+  if (!confirm('Excluir este custo fixo?')) return;
+  await db.from('custos_fixos').update({ ativo: false }).eq('id', id);
+  await carregarCustosFixos();
+}
+
+function navTo(p,btn){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');btn.classList.add('active');if(p==='cardapio')renderCardapio();if(p==='dash')renderDash();if(p==='admin')carregarAdmin();if(p==='analise')carregarAnalise();if(p==='caixa')carregarCaixa();}
 
 function entrarAdmin(btn){if(adminLogado){navTo('admin',btn);return;}document.getElementById('login-admin').style.display='flex';document.getElementById('admin-senha').value='';document.getElementById('login-erro').style.display='none';setTimeout(()=>document.getElementById('admin-senha').focus(),100);}
 function verificarSenha(){const s=document.getElementById('admin-senha').value;if(s===ADMIN_SENHA){adminLogado=true;document.getElementById('login-admin').style.display='none';document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-admin').classList.add('active');document.querySelectorAll('.nav-btn')[4].classList.add('active');carregarAdmin();}else{document.getElementById('login-erro').style.display='block';document.getElementById('admin-senha').value='';}}
