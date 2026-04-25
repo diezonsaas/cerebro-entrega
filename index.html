@@ -996,11 +996,30 @@ async function salvarLancamento() {
   const categoria = document.getElementById('lanc-categoria').value;
   const descricao = document.getElementById('lanc-desc').value;
   const valor = parseFloat(document.getElementById('lanc-valor').value);
-  const data = document.getElementById('lanc-data').value;
+  const dataInput = document.getElementById('lanc-data').value;
+  
   if (!categoria) { alert('Selecione uma categoria.'); return; }
   if (!valor || valor <= 0) { alert('Informe o valor.'); return; }
-  const { error } = await db.from('caixa').insert({ tipo, categoria, descricao, valor, data });
-  if (!error) {
+  if (!dataInput) { alert('Informe a data.'); return; }
+
+  // Garantir formato ISO YYYY-MM-DD
+  let data = dataInput;
+  if (dataInput.includes('/')) {
+    const partes = dataInput.split('/');
+    data = `${partes[2]}-${partes[1]}-${partes[0]}`;
+  }
+
+  const { error } = await db.from('caixa').insert({ 
+    tipo, categoria, 
+    descricao: descricao || null, 
+    valor, 
+    data 
+  });
+  
+  if (error) {
+    console.error('Erro ao salvar:', error);
+    alert('Erro ao salvar: ' + error.message);
+  } else {
     fecharModal('modal-lancamento');
     await carregarCaixa();
   }
