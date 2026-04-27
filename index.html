@@ -1420,6 +1420,18 @@ function abrirLancamento(tipo) {
   document.getElementById('modal-lancamento').classList.add('open');
 }
 
+async function excluirLancamento(id) {
+  if (!confirm('Excluir este lançamento?')) return;
+  const { error } = await db.from('caixa').delete().eq('id', id);
+  if (!error) {
+    const el = document.getElementById('lanc-' + id);
+    if (el) el.remove();
+    await carregarCaixa();
+    await carregarSaldoDash();
+    await carregarLancamentosDash();
+  }
+}
+
 async function salvarLancamento() {
   const tipo = document.getElementById('lanc-tipo').value;
   const categoria = document.getElementById('lanc-categoria').value;
