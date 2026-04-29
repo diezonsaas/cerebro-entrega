@@ -1432,14 +1432,17 @@ async function carregarCaixa() {
     histEl.innerHTML = lancamentos.slice(0, 20).map(l => {
       const label = getCatLabel(l.tipo, l.categoria);
       const data = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      return `<div class="list-item">
-        <div>
+      return `<div class="list-item" id="lanc-${l.id}">
+        <div style="flex:1;">
           <div class="list-title">${l.descricao || label}</div>
           <div class="list-sub">${label} · ${data}</div>
         </div>
-        <span style="font-weight:600;color:${l.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">
-          ${l.tipo === 'entrada' ? '+' : '−'}${fmt(l.valor)}
-        </span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-weight:700;color:${l.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">
+            ${l.tipo === 'entrada' ? '+' : '−'}${fmt(l.valor)}
+          </span>
+          <button onclick="excluirLancamento('${l.id}')" style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;">×</button>
+        </div>
       </div>`;
     }).join('');
   }
