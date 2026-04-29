@@ -1504,7 +1504,8 @@ async function salvarLancamento() {
   const tipo = document.getElementById('lanc-tipo').value;
   const categoria = document.getElementById('lanc-categoria').value;
   const descricao = document.getElementById('lanc-desc').value;
-  const valor = parseFloat(document.getElementById('lanc-valor').value);
+  const valorRaw = document.getElementById('lanc-valor').value.trim().replace(/\./g,'').replace(',','.');
+  const valor = parseFloat(valorRaw);
   const dataInput = document.getElementById('lanc-data').value;
   
   if (!categoria) { alert('Selecione uma categoria.'); return; }
