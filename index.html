@@ -493,10 +493,48 @@ button { font-family: 'Plus Jakarta Sans', sans-serif; cursor: pointer; border: 
       <div class="page-title">Análise</div>
       <div class="page-sub">Visão financeira da operação</div>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:16px;">
-      <button class="periodo-chip active" onclick="setPeriodo(7,this)">7 dias</button>
-      <button class="periodo-chip" onclick="setPeriodo(14,this)">14 dias</button>
-      <button class="periodo-chip" onclick="setPeriodo(30,this)">30 dias</button>
+
+    <!-- SELETOR DE MODO -->
+    <div class="tab-row" style="margin-bottom:12px;">
+      <button class="tab-btn active" onclick="setModoAnalise('periodo',this)">Por período</button>
+      <button class="tab-btn" onclick="setModoAnalise('mensal',this)">Fechamento mensal</button>
+    </div>
+
+    <!-- MODO PERÍODO -->
+    <div id="analise-modo-periodo">
+      <div style="display:flex;gap:6px;margin-bottom:16px;">
+        <button class="periodo-chip active" onclick="setPeriodo(7,this)">7 dias</button>
+        <button class="periodo-chip" onclick="setPeriodo(14,this)">14 dias</button>
+        <button class="periodo-chip" onclick="setPeriodo(30,this)">30 dias</button>
+      </div>
+    </div>
+
+    <!-- MODO MENSAL -->
+    <div id="analise-modo-mensal" style="display:none;">
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="periodo-chip active" onclick="setMesAnalise(3,2026,this)">Mar/26</button>
+        <button class="periodo-chip" onclick="setMesAnalise(4,2026,this)">Abr/26</button>
+        <button class="periodo-chip" onclick="setMesAnalise(5,2026,this)">Mai/26</button>
+      </div>
+
+      <!-- DRE Mensal -->
+      <div class="card" id="dre-mensal-card">
+        <div class="card-title">DRE — Demonstração do Resultado</div>
+        <div id="dre-mensal-corpo">
+          <div class="empty" style="padding:16px 0;">Selecione um mês para ver o resultado.</div>
+        </div>
+      </div>
+
+      <!-- Plano de contas -->
+      <div class="card">
+        <div class="card-title">Receitas por origem</div>
+        <div id="dre-receitas"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Despesas por categoria</div>
+        <div id="dre-despesas"></div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">Resumo do período</div>
@@ -982,11 +1020,14 @@ async function processarIFood(rows, identificado) {
       createdAt = `${ano}-${mes}-${dia}T${p[1]||'12:00:00'}`;
     } catch(e) { createdAt = new Date().toISOString(); }
 
+    const idCurto = String(r['ID CURTO DO PEDIDO'] || '').trim();
+    const idCompleto = String(r['ID COMPLETO DO PEDIDO'] || '').trim();
     return { loja_id: identificado.loja_id, plataforma_id: identificado.plat_id,
       preco_venda: valorItens, custo_producao: CMV_MED, custo_motoboy: custoMoto,
       taxa_plataforma: valorItens * 0.152, lucro, margem,
       distancia_km: Math.ceil(distancia)||1, quantidade: 1,
       status: lucro<0?'prejuizo':lucro<4?'risco':'saudavel', created_at: createdAt,
+      pedido_ref: idCurto ? '#' + idCurto : idCompleto.slice(0,8),
       _inc_loja: incLoja, _liquido: valorLiquido };
   });
 
@@ -1032,11 +1073,13 @@ async function processar99Food(rows, identificado) {
       createdAt = `${ano}-${mes}-${dia}T12:00:00`;
     }
 
+    const id99 = String(r['ID do pedido'] || '').trim();
     return { loja_id: identificado.loja_id, plataforma_id: identificado.plat_id,
       preco_venda: preco, custo_producao: CMV_MED, custo_motoboy: custoMoto,
       taxa_plataforma: preco * 0.032, lucro, margem: preco>0?(lucro/preco)*100:0,
       distancia_km: 1, quantidade: 1,
       status: lucro<0?'prejuizo':lucro<4?'risco':'saudavel', created_at: createdAt,
+      pedido_ref: id99 ? '#' + id99.slice(-6) : '',
       _inc_loja: despOfer, _frete: custoFrete };
   });
 
@@ -1225,6 +1268,28 @@ async function carregarAnalise() {
     <text x="50" y="46" text-anchor="middle" font-size="14" font-weight="600" fill="#f0ede8" font-family="DM Sans">${total}</text>
     <text x="50" y="60" text-anchor="middle" font-size="8" fill="#5a5855" font-family="DM Sans">pedidos</text>
   </svg>`;
+
+  // Pedidos no prejuízo com referência
+  const prejPedidos = data.filter(p => p.status === 'prejuizo').slice(0, 5);
+  const prejEl = document.getElementById('analise-prej');
+  if (prejEl) {
+    if (prejPedidos.length) {
+      prejEl.innerHTML = prejPedidos.map(p => {
+        const platNome = p.plataforma_id === PLAT_IFOOD || p.plataforma_id === PLAT_IF_RAIZES || p.plataforma_id === PLAT_IF_VDN ? 'iFood' : '99Food';
+        const ref = p.pedido_ref || '—';
+        const dt = new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        return `<div class="list-item">
+          <div>
+            <div class="list-title" style="color:var(--red);">${ref} <span style="font-size:11px;color:var(--text3);">${platNome} · ${dt}</span></div>
+            <div class="list-sub">${fmt(p.preco_venda)} vendido · CMV ${fmt(p.custo_producao)}</div>
+          </div>
+          <span style="font-weight:700;color:var(--red);">${fmtS(p.lucro)}</span>
+        </div>`;
+      }).join('');
+    } else {
+      prejEl.innerHTML = '<div class="empty" style="padding:12px 0;">Nenhum pedido com prejuízo no período. 🎉</div>';
+    }
+  }
 
   const dm = document.getElementById('donut-main');
   if(dm) dm.innerHTML = `<div class="donut-wrap">${svg}
@@ -1702,9 +1767,9 @@ async function carregarHoje() {
   const melhor = ped.reduce((a,b) => b.lucro > a.lucro ? b : a, ped[0]);
   const pior = ped.reduce((a,b) => b.lucro < a.lucro ? b : a, ped[0]);
   document.getElementById('hoje-melhor').textContent = fmtS(melhor.lucro);
-  document.getElementById('hoje-melhor-sub').textContent = fmt(melhor.preco_venda) + ' · ' + melhor.distancia_km + 'km';
+  document.getElementById('hoje-melhor-sub').textContent = fmt(melhor.preco_venda) + (melhor.pedido_ref ? ' · ' + melhor.pedido_ref : '') + ' · ' + melhor.distancia_km + 'km';
   document.getElementById('hoje-pior').textContent = fmtS(pior.lucro);
-  document.getElementById('hoje-pior-sub').textContent = fmt(pior.preco_venda) + ' · ' + pior.distancia_km + 'km';
+  document.getElementById('hoje-pior-sub').textContent = fmt(pior.preco_venda) + (pior.pedido_ref ? ' · ' + pior.pedido_ref : '') + ' · ' + pior.distancia_km + 'km';
 
   // Insights automáticos
   const insights = [];
@@ -1740,6 +1805,134 @@ async function carregarHoje() {
       <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);">
         <div style="width:8px;height:8px;border-radius:50%;background:${i.cor};flex-shrink:0;margin-top:4px;"></div>
         <div style="font-size:13px;color:var(--text2);line-height:1.5;">${i.txt}</div>
+      </div>`).join('');
+  }
+}
+
+
+// ===== ANÁLISE MENSAL =====
+let modoAnaliseAtual = 'periodo';
+let mesAtual = 4, anoAtual = 2026;
+
+function setModoAnalise(modo, btn) {
+  modoAnaliseAtual = modo;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('analise-modo-periodo').style.display = modo === 'periodo' ? 'block' : 'none';
+  document.getElementById('analise-modo-mensal').style.display = modo === 'mensal' ? 'block' : 'none';
+  if (modo === 'mensal') carregarDREMensal(mesAtual, anoAtual);
+}
+
+function setMesAnalise(mes, ano, btn) {
+  mesAtual = mes; anoAtual = ano;
+  document.querySelectorAll('#analise-modo-mensal .periodo-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarDREMensal(mes, ano);
+}
+
+async function carregarDREMensal(mes, ano) {
+  const inicio = `${ano}-${String(mes).padStart(2,'0')}-01`;
+  const fim = new Date(ano, mes, 0);
+  const fimStr = `${ano}-${String(mes).padStart(2,'0')}-${String(fim.getDate()).padStart(2,'0')}`;
+
+  // Buscar pedidos do mês
+  const { data: pedidos } = await db.from('pedidos').select('*')
+    .eq('loja_id', LOJA_ID)
+    .gte('created_at', inicio + 'T00:00:00')
+    .lte('created_at', fimStr + 'T23:59:59');
+
+  // Buscar lançamentos do caixa do mês
+  const { data: lancamentos } = await db.from('caixa').select('*')
+    .gte('data', inicio)
+    .lte('data', fimStr)
+    .order('data', { ascending: true });
+
+  const ped = pedidos || [];
+  const lanc = lancamentos || [];
+
+  // Receitas do caixa
+  const entradas = lanc.filter(l => l.tipo === 'entrada');
+  const saidas = lanc.filter(l => l.tipo === 'saida');
+  const totalEntradas = entradas.reduce((s,l) => s + l.valor, 0);
+  const totalCMV = saidas.filter(l => l.categoria.startsWith('insumo') || l.categoria === 'embalagem').reduce((s,l) => s + l.valor, 0);
+  const totalPessoal = saidas.filter(l => l.categoria === 'motoboy' || l.categoria === 'gestao').reduce((s,l) => s + l.valor, 0);
+  const totalOp = saidas.filter(l => ['luz','internet','aluguel','gasolina','chip_maquininha','taxa_plataforma'].includes(l.categoria)).reduce((s,l) => s + l.valor, 0);
+  const totalOutros = saidas.filter(l => l.categoria === 'outros_saida').reduce((s,l) => s + l.valor, 0);
+  const totalSaidas = saidas.reduce((s,l) => s + l.valor, 0);
+  const lucroLiq = totalEntradas - totalSaidas;
+  const margem = totalEntradas > 0 ? (lucroLiq / totalEntradas * 100) : 0;
+
+  // Lucro estimado dos pedidos
+  const lucroEstPedidos = ped.reduce((s,p) => s + p.lucro, 0);
+  const fatPedidos = ped.reduce((s,p) => s + p.preco_venda * p.quantidade, 0);
+
+  const meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  
+  const dreCorp = document.getElementById('dre-mensal-corpo');
+  dreCorp.innerHTML = `
+    <div style="margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">${meses[mes]} ${ano}</div>
+    </div>
+    
+    <div class="brow" style="font-size:14px;"><span style="font-weight:600;">📦 Pedidos importados</span><span>${ped.length} pedidos</span></div>
+    <div class="brow"><span style="padding-left:12px;">Faturamento bruto</span><span class="pos">${fmt(fatPedidos)}</span></div>
+    <div class="brow"><span style="padding-left:12px;">Lucro estimado (CMV+frete)</span><span style="color:${lucroEstPedidos<0?'var(--red)':'var(--green)'};">${fmtS(lucroEstPedidos)}</span></div>
+    
+    <div style="height:1px;background:var(--border);margin:10px 0;"></div>
+    
+    <div class="brow" style="font-size:14px;"><span style="font-weight:600;">💰 Caixa lançado</span><span></span></div>
+    <div class="brow"><span style="padding-left:12px;">Total de entradas</span><span class="pos">${fmt(totalEntradas)}</span></div>
+    <div class="brow"><span style="padding-left:12px;">Insumos e embalagens (CMV)</span><span class="neg">−${fmt(totalCMV)}</span></div>
+    <div class="brow"><span style="padding-left:12px;">Pessoal (motoboy, gestão)</span><span class="neg">−${fmt(totalPessoal)}</span></div>
+    <div class="brow"><span style="padding-left:12px;">Operacional (luz, internet...)</span><span class="neg">−${fmt(totalOp)}</span></div>
+    <div class="brow"><span style="padding-left:12px;">Outros</span><span class="neg">−${fmt(totalOutros)}</span></div>
+    
+    <div style="height:1px;background:var(--border);margin:10px 0;"></div>
+    
+    <div class="brow" style="font-size:16px;font-weight:700;">
+      <span>Lucro líquido do mês</span>
+      <span style="color:${lucroLiq<0?'var(--red)':lucroLiq<100?'var(--amber)':'var(--green)'};">${fmtS(lucroLiq)}</span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px;text-align:center;">
+      Margem líquida: ${margem.toFixed(1)}%
+      ${!lanc.length ? '<br><span style="color:var(--amber);">⚠️ Nenhum lançamento no caixa este mês</span>' : ''}
+    </div>`;
+
+  // Receitas por origem
+  const recPorCat = {};
+  entradas.forEach(l => {
+    const label = CATEGORIAS_ENTRADA?.find(c=>c.value===l.categoria)?.label || l.categoria;
+    if(!recPorCat[label]) recPorCat[label] = 0;
+    recPorCat[label] += l.valor;
+  });
+
+  const recEl = document.getElementById('dre-receitas');
+  if(!Object.keys(recPorCat).length) {
+    recEl.innerHTML = '<div class="empty" style="padding:12px 0;">Nenhuma receita lançada no caixa.</div>';
+  } else {
+    recEl.innerHTML = Object.entries(recPorCat).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => `
+      <div class="list-item">
+        <div class="list-title">${cat}</div>
+        <span style="font-weight:700;color:var(--green);">+${fmt(val)}</span>
+      </div>`).join('');
+  }
+
+  // Despesas por categoria
+  const despPorCat = {};
+  saidas.forEach(l => {
+    const label = CATEGORIAS_SAIDA?.find(c=>c.value===l.categoria)?.label || l.categoria;
+    if(!despPorCat[label]) despPorCat[label] = 0;
+    despPorCat[label] += l.valor;
+  });
+
+  const despEl = document.getElementById('dre-despesas');
+  if(!Object.keys(despPorCat).length) {
+    despEl.innerHTML = '<div class="empty" style="padding:12px 0;">Nenhuma despesa lançada no caixa.</div>';
+  } else {
+    despEl.innerHTML = Object.entries(despPorCat).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => `
+      <div class="list-item">
+        <div class="list-title">${cat}</div>
+        <span style="font-weight:700;color:var(--red);">−${fmt(val)}</span>
       </div>`).join('');
   }
 }
