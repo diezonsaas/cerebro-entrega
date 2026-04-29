@@ -1504,7 +1504,18 @@ async function salvarLancamento() {
   const tipo = document.getElementById('lanc-tipo').value;
   const categoria = document.getElementById('lanc-categoria').value;
   const descricao = document.getElementById('lanc-desc').value;
-  const valorRaw = document.getElementById('lanc-valor').value.trim().replace(/\./g,'').replace(',','.');
+  const valorStr = document.getElementById('lanc-valor').value.trim();
+  let valorRaw;
+  if (valorStr.includes(',')) {
+    // formato brasileiro: 2100,09
+    valorRaw = valorStr.replace(/\./g,'').replace(',','.');
+  } else if (valorStr.includes('.')) {
+    // formato americano: 2100.09
+    valorRaw = valorStr;
+  } else {
+    // só números: 2100
+    valorRaw = valorStr;
+  }
   const valor = parseFloat(valorRaw);
   const dataInput = document.getElementById('lanc-data').value;
   
