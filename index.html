@@ -502,10 +502,24 @@ button { font-family: 'Plus Jakarta Sans', sans-serif; cursor: pointer; border: 
 
     <!-- MODO PERÍODO -->
     <div id="analise-modo-periodo">
-      <div style="display:flex;gap:6px;margin-bottom:16px;">
-        <button class="periodo-chip active" onclick="setPeriodo(7,this)">7 dias</button>
-        <button class="periodo-chip" onclick="setPeriodo(14,this)">14 dias</button>
-        <button class="periodo-chip" onclick="setPeriodo(30,this)">30 dias</button>
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+        <button class="periodo-chip active" id="chip-7" onclick="setPeriodo(7,this)">7 dias</button>
+        <button class="periodo-chip" id="chip-14" onclick="setPeriodo(14,this)">14 dias</button>
+        <button class="periodo-chip" id="chip-30" onclick="setPeriodo(30,this)">30 dias</button>
+        <button class="periodo-chip" id="chip-custom" onclick="togglePeriodoCustom()">Personalizado</button>
+      </div>
+      <div id="periodo-custom-box" style="display:none;background:var(--bg3);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;border:1px solid var(--border);">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div class="field" style="margin:0;">
+            <label>De</label>
+            <input type="date" id="data-inicio-custom">
+          </div>
+          <div class="field" style="margin:0;">
+            <label>Até</label>
+            <input type="date" id="data-fim-custom">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="aplicarPeriodoCustom()" style="padding:10px;">Aplicar</button>
       </div>
 
       <!-- HERO MÉTRICAS ESTILO BERRYTECH -->
@@ -1173,15 +1187,41 @@ function renderAnaliseVazio() {
 }
 
 let analise_dias = 7;
-function setPeriodo(d,btn){analise_dias=d;document.querySelectorAll('#analise-modo-periodo .periodo-chip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');carregarAnalise();}
+let analise_inicio_custom = null;
+let analise_fim_custom = null;
+let analise_modo_custom = false;
+function setPeriodo(d,btn){
+  analise_dias=d;
+  analise_modo_custom=false;
+  analise_inicio_custom=null;
+  analise_fim_custom=null;
+  document.querySelectorAll('#analise-modo-periodo .periodo-chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const box=document.getElementById('periodo-custom-box');
+  if(box) box.style.display='none';
+  carregarAnalise();
+}
 async function carregarAnalise() {
-  const dias = analise_dias || 7;
-  const inicio = new Date();
-  inicio.setDate(inicio.getDate() - dias);
-  const inicioStr = inicio.toISOString().split('T')[0];
+  let inicioStr, fimStr;
+  if (analise_modo_custom && analise_inicio_custom && analise_fim_custom) {
+    inicioStr = analise_inicio_custom;
+    fimStr = analise_fim_custom;
+  } else {
+    const dias = analise_dias || 7;
+    const inicio = new Date();
+    inicio.setDate(inicio.getDate() - dias);
+    inicioStr = inicio.toISOString().split('T')[0];
+    fimStr = new Date().toISOString().split('T')[0];
+  }
 
-  const { data: pedidos } = await db.from('pedidos').select('*').gte('created_at', inicioStr + 'T00:00:00').order('created_at', { ascending: true });
-  const { data: lancamentos } = await db.from('caixa').select('*').gte('data', inicioStr).order('data', { ascending: true });
+  const { data: pedidos } = await db.from('pedidos').select('*')
+    .gte('created_at', inicioStr + 'T00:00:00')
+    .lte('created_at', fimStr + 'T23:59:59')
+    .order('created_at', { ascending: true });
+  const { data: lancamentos } = await db.from('caixa').select('*')
+    .gte('data', inicioStr)
+    .lte('data', fimStr)
+    .order('data', { ascending: true });
 
   const ped = pedidos || [];
   const lanc = lancamentos || [];
@@ -1447,6 +1487,154 @@ async function carregarDREMensal(mes, ano) {
         <span style="font-weight:700;color:var(--red);">−${fmt(val)}</span>
       </div>`).join('');
   }
+}
+
+
+async function carregarCaixa() {
+  const inicio = getPeriodoFiltro();
+
+  const { data } = await db.from('caixa')
+    .select('*')
+    .gte('data', inicio)
+    .order('created_at', { ascending: false });
+
+  const lancamentos = data || [];
+
+  // Saldo total (todos os tempos)
+  const { data: todos } = await db.from('caixa').select('tipo, valor');
+  const saldoTotal = (todos || []).reduce((s, l) =>
+    l.tipo === 'entrada' ? s + l.valor : s - l.valor, 0);
+
+  const saldoEl = document.getElementById('caixa-saldo');
+  if(saldoEl) {
+    saldoEl.textContent = fmtS(saldoTotal);
+    saldoEl.style.color = saldoTotal < 0 ? 'var(--red)' : saldoTotal < 100 ? 'var(--amber)' : 'var(--orange)';
+  }
+
+  const periodoLabel = caixaPeriodo === 'hoje' ? 'hoje' : caixaPeriodo === 'semana' ? 'últimos 7 dias' : 'este mês';
+  const subEl = document.getElementById('caixa-saldo-sub');
+  if(subEl) subEl.textContent = 'Movimentações: ' + periodoLabel;
+
+  // DRE do período
+  const entradas = lancamentos.filter(l => l.tipo === 'entrada');
+  const saidas = lancamentos.filter(l => l.tipo === 'saida');
+  const totalEntrada = entradas.reduce((s, l) => s + l.valor, 0);
+  const totalCMV = saidas.filter(l => l.categoria && (l.categoria.startsWith('insumo') || l.categoria === 'embalagem')).reduce((s, l) => s + l.valor, 0);
+  const totalOp = saidas.filter(l => l.categoria && !l.categoria.startsWith('insumo') && l.categoria !== 'embalagem').reduce((s, l) => s + l.valor, 0);
+  const lucroLiq = totalEntrada - totalCMV - totalOp;
+  const margemLiq = totalEntrada > 0 ? (lucroLiq / totalEntrada * 100) : 0;
+
+  const dreReceita = document.getElementById('dre-receita');
+  const dreCmv = document.getElementById('dre-cmv');
+  const dreOp = document.getElementById('dre-op');
+  const dreLucro = document.getElementById('dre-lucro');
+  const dreBarraFill = document.getElementById('dre-barra-fill');
+  const dreMargemTxt = document.getElementById('dre-margem-txt');
+
+  if(dreReceita) dreReceita.textContent = fmt(totalEntrada);
+  if(dreCmv) dreCmv.textContent = fmt(totalCMV);
+  if(dreOp) dreOp.textContent = fmt(totalOp);
+  if(dreLucro) {
+    dreLucro.textContent = fmtS(lucroLiq);
+    dreLucro.className = 'metric-val ' + (lucroLiq < 0 ? 'red' : lucroLiq < 50 ? 'amber' : 'green');
+  }
+  if(dreBarraFill) {
+    const barraWidth = totalEntrada > 0 ? Math.max(0, Math.min(100, margemLiq)) : 0;
+    dreBarraFill.style.width = barraWidth + '%';
+    dreBarraFill.style.background = lucroLiq < 0 ? 'var(--red)' : lucroLiq < 50 ? 'var(--amber)' : 'var(--green)';
+  }
+  if(dreMargemTxt) dreMargemTxt.textContent = totalEntrada > 0 ? 'Margem líquida: ' + margemLiq.toFixed(1) + '%' : '';
+
+  // Por categoria
+  const porCat = {};
+  lancamentos.forEach(l => {
+    const key = l.tipo + '_' + l.categoria;
+    if (!porCat[key]) porCat[key] = { tipo: l.tipo, categoria: l.categoria, total: 0, count: 0 };
+    porCat[key].total += l.valor;
+    porCat[key].count += 1;
+  });
+
+  const getCatLabel = (tipo, cat) => {
+    const lista = tipo === 'entrada' ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA;
+    return lista.find(c => c.value === cat)?.label || cat;
+  };
+
+  const catEl = document.getElementById('caixa-categorias');
+  if(catEl) {
+    if (!Object.keys(porCat).length) {
+      catEl.innerHTML = '<div class="empty">Nenhum lançamento no período.</div>';
+    } else {
+      catEl.innerHTML = Object.values(porCat)
+        .sort((a, b) => b.total - a.total)
+        .map(c => `
+          <div class="list-item">
+            <div>
+              <div class="list-title">${getCatLabel(c.tipo, c.categoria)}</div>
+              <div class="list-sub">${c.count} lançamento${c.count > 1 ? 's' : ''}</div>
+            </div>
+            <span style="font-weight:600;color:${c.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">
+              ${c.tipo === 'entrada' ? '+' : '−'}${fmt(c.total)}
+            </span>
+          </div>`).join('');
+    }
+  }
+
+  // Histórico
+  const histEl = document.getElementById('caixa-historico');
+  if(histEl) {
+    if (!lancamentos.length) {
+      histEl.innerHTML = '<div class="empty">Nenhum lançamento no período.</div>';
+    } else {
+      histEl.innerHTML = lancamentos.slice(0, 20).map(l => {
+        const dt = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const label = getCatLabel(l.tipo, l.categoria);
+        return `<div class="list-item" id="lanc-${l.id}">
+          <div style="flex:1;">
+            <div class="list-title">${l.descricao || label}</div>
+            <div class="list-sub">${label} · ${dt}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-weight:700;color:${l.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">
+              ${l.tipo === 'entrada' ? '+' : '−'}${fmt(l.valor)}
+            </span>
+            <button onclick="excluirLancamento('${l.id}')" style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;">×</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  carregarCustosFixos();
+}
+
+
+// Período personalizado na análise
+function togglePeriodoCustom() {
+  const box = document.getElementById('periodo-custom-box');
+  const chip = document.getElementById('chip-custom');
+  const visible = box.style.display !== 'none';
+  box.style.display = visible ? 'none' : 'block';
+  if (!visible) {
+    document.querySelectorAll('#analise-modo-periodo .periodo-chip').forEach(b => b.classList.remove('active'));
+    chip.classList.add('active');
+    // Preencher datas padrão
+    const hoje = new Date();
+    const inicio = new Date();
+    inicio.setDate(hoje.getDate() - 7);
+    document.getElementById('data-inicio-custom').value = inicio.toISOString().split('T')[0];
+    document.getElementById('data-fim-custom').value = hoje.toISOString().split('T')[0];
+  }
+}
+
+function aplicarPeriodoCustom() {
+  const ini = document.getElementById('data-inicio-custom').value;
+  const fim = document.getElementById('data-fim-custom').value;
+  if (!ini || !fim) { alert('Selecione as duas datas.'); return; }
+  if (ini > fim) { alert('A data inicial deve ser antes da data final.'); return; }
+  analise_inicio_custom = ini;
+  analise_fim_custom = fim;
+  analise_modo_custom = true;
+  carregarAnalise();
 }
 
 function navTo(p,btn){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');btn.classList.add('active');if(p==='cardapio')renderCardapio();if(p==='dash')renderDash();if(p==='admin')carregarAdmin();if(p==='analise')carregarAnalise();if(p==='caixa')carregarCaixa();if(p==='hoje')carregarHoje();}
