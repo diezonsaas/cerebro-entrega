@@ -494,7 +494,7 @@ button { font-family: 'Plus Jakarta Sans', sans-serif; cursor: pointer; border: 
       <div class="page-sub">Visão financeira da operação</div>
     </div>
 
-    <!-- SELETOR DE MODO -->
+    <!-- TABS -->
     <div class="tab-row" style="margin-bottom:12px;">
       <button class="tab-btn active" onclick="setModoAnalise('periodo',this)">Por período</button>
       <button class="tab-btn" onclick="setModoAnalise('mensal',this)">Fechamento mensal</button>
@@ -507,6 +507,64 @@ button { font-family: 'Plus Jakarta Sans', sans-serif; cursor: pointer; border: 
         <button class="periodo-chip" onclick="setPeriodo(14,this)">14 dias</button>
         <button class="periodo-chip" onclick="setPeriodo(30,this)">30 dias</button>
       </div>
+
+      <!-- HERO MÉTRICAS ESTILO BERRYTECH -->
+      <div style="background:#1A1714;border-radius:var(--radius);padding:16px;margin-bottom:12px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:radial-gradient(circle,rgba(249,115,22,0.2) 0%,transparent 70%);pointer-events:none;"></div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Resumo do período</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:2px;">Faturamento bruto</div>
+            <div id="db-fat" style="font-size:20px;font-weight:700;color:#fff;">R$0</div>
+            <div id="db-fat-var" style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px;"></div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:2px;">Lucro bruto est.</div>
+            <div id="db-lucro" style="font-size:20px;font-weight:700;color:#4ade80;">R$0</div>
+            <div id="db-margem" style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px;"></div>
+          </div>
+        </div>
+        <div style="height:1px;background:rgba(255,255,255,0.08);margin-bottom:10px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div>
+            <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px;">Custos CMV</div>
+            <div id="db-cmv" style="font-size:14px;font-weight:600;color:#f87171;">R$0</div>
+          </div>
+          <div>
+            <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px;">Desp. fixas</div>
+            <div id="db-fixo" style="font-size:14px;font-weight:600;color:#fbbf24;">R$0</div>
+          </div>
+          <div>
+            <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px;">Pedidos</div>
+            <div id="db-pedidos" style="font-size:14px;font-weight:600;color:#60a5fa;">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRÁFICO FATURAMENTO POR DIA -->
+      <div class="card">
+        <div class="card-title">Faturamento por dia</div>
+        <div id="grafico-fat" style="display:flex;align-items:flex-end;gap:3px;height:100px;padding-bottom:20px;position:relative;"></div>
+      </div>
+
+      <!-- POR PLATAFORMA -->
+      <div class="card">
+        <div class="card-title">Por plataforma</div>
+        <div id="analise-plat"><div class="empty">Importe um relatório para ver.</div></div>
+      </div>
+
+      <!-- DESPESAS POR CATEGORIA -->
+      <div class="card">
+        <div class="card-title">Despesas por categoria</div>
+        <div id="analise-desp"><div class="empty">Lance saídas no caixa para ver.</div></div>
+      </div>
+
+      <!-- PEDIDOS NO PREJUÍZO -->
+      <div class="card">
+        <div class="card-title" style="color:var(--red);">Pedidos no prejuízo</div>
+        <div class="alerta red" style="margin-bottom:12px;">Busque o número no painel do iFood ou 99Food para investigar.</div>
+        <div id="analise-prej"><div class="empty" style="padding:12px 0;">Importe um relatório para ver.</div></div>
+      </div>
     </div>
 
     <!-- MODO MENSAL -->
@@ -517,15 +575,11 @@ button { font-family: 'Plus Jakarta Sans', sans-serif; cursor: pointer; border: 
         <button class="periodo-chip" onclick="setMesAnalise(5,2026,this)">Mai/26</button>
       </div>
 
-      <!-- DRE Mensal -->
       <div class="card" id="dre-mensal-card">
         <div class="card-title">DRE — Demonstração do Resultado</div>
-        <div id="dre-mensal-corpo">
-          <div class="empty" style="padding:16px 0;">Selecione um mês para ver o resultado.</div>
-        </div>
+        <div id="dre-mensal-corpo"><div class="empty" style="padding:16px 0;">Selecione um mês.</div></div>
       </div>
 
-      <!-- Plano de contas -->
       <div class="card">
         <div class="card-title">Receitas por origem</div>
         <div id="dre-receitas"></div>
@@ -536,36 +590,9 @@ button { font-family: 'Plus Jakarta Sans', sans-serif; cursor: pointer; border: 
         <div id="dre-despesas"></div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-title">Resumo do período</div>
-      <div class="metrics">
-        <div class="metric"><div class="metric-label">Total pedidos</div><div class="metric-val" id="an-pedidos">—</div></div>
-        <div class="metric"><div class="metric-label">Lucro total</div><div class="metric-val green" id="an-lucro">—</div></div>
-        <div class="metric"><div class="metric-label">Faturado</div><div class="metric-val" id="an-fat">—</div></div>
-        <div class="metric"><div class="metric-label">Margem média</div><div class="metric-val" id="an-margem">—</div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Lucro por dia</div>
-      <div class="bar-chart" id="chart-dias"></div>
-      <div id="chart-dias-empty" class="empty" style="display:none;">Registre pedidos na calculadora para ver o gráfico.</div>
-    </div>
-    <div class="card">
-      <div class="card-title">iFood vs 99Food</div>
-      <div class="plat-compare">
-        <div class="plat-box"><div class="plat-name" style="color:#E85C30;">iFood</div><div class="plat-val" id="plat-if-lucro">—</div><div class="plat-sub" id="plat-if-ped">0 pedidos</div><div class="plat-sub" id="plat-if-margem">—</div></div>
-        <div class="plat-box"><div class="plat-name" style="color:#F5A623;">99Food</div><div class="plat-val" id="plat-99-lucro">—</div><div class="plat-sub" id="plat-99-ped">0 pedidos</div><div class="plat-sub" id="plat-99-margem">—</div></div>
-      </div>
-      <div id="plat-insight" style="margin-top:12px;font-size:13px;color:var(--text3);"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Status dos pedidos</div>
-      <div id="donut-main"><div class="empty">Registre pedidos para ver a distribuição.</div></div>
-    </div>
   </div>
 
-
-  <!-- CAIXA -->
+    <!-- CAIXA -->
   <div class="page" id="page-caixa">
     <div style="padding-top:16px;">
       <div class="page-title">Caixa</div>
@@ -1145,691 +1172,152 @@ function renderAnaliseVazio() {
   if(p9) p9.textContent = '—';
 }
 
+let analise_dias = 7;
+function setPeriodo(d,btn){analise_dias=d;document.querySelectorAll('#analise-modo-periodo .periodo-chip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');carregarAnalise();}
 async function carregarAnalise() {
-  // Busca todos os pedidos disponíveis
-  const { data: todos, error } = await db.from('pedidos')
-    .select('*')
-    .eq('loja_id', LOJA_ID)
-    .order('created_at', { ascending: true });
+  const dias = analise_dias || 7;
+  const inicio = new Date();
+  inicio.setDate(inicio.getDate() - dias);
+  const inicioStr = inicio.toISOString().split('T')[0];
 
-  if (error || !todos || todos.length === 0) {
-    renderAnaliseVazio();
-    return;
-  }
+  const { data: pedidos } = await db.from('pedidos').select('*').gte('created_at', inicioStr + 'T00:00:00').order('created_at', { ascending: true });
+  const { data: lancamentos } = await db.from('caixa').select('*').gte('data', inicioStr).order('data', { ascending: true });
 
-  // Pega a data mais recente dos dados e filtra pelo período
-  const ultimaData = new Date(todos[todos.length - 1].created_at);
-  const inicioFiltro = new Date(ultimaData);
-  inicioFiltro.setDate(inicioFiltro.getDate() - periodoAtual);
-  const data = todos.filter(p => new Date(p.created_at) >= inicioFiltro);
+  const ped = pedidos || [];
+  const lanc = lancamentos || [];
 
-  if (!data.length) {
-    renderAnaliseVazio();
-    return;
-  }
+  // MÉTRICAS HERO
+  const fatTotal = ped.reduce((s,p) => s + p.preco_venda * p.quantidade, 0);
+  const lucroTotal = ped.reduce((s,p) => s + p.lucro, 0);
+  const cmvTotal = ped.reduce((s,p) => s + p.custo_producao * p.quantidade, 0);
+  const motoTotal = ped.reduce((s,p) => s + p.custo_motoboy, 0);
+  const margem = fatTotal > 0 ? (lucroTotal / fatTotal * 100) : 0;
 
-  const ce = document.getElementById('chart-dias-empty');
-  if(ce) ce.style.display = 'none';
+  const saidas = lanc.filter(l => l.tipo === 'saida');
+  const fixoTotal = saidas.reduce((s,l) => s + l.valor, 0);
 
-  // Métricas resumo
-  const totalLucro = data.reduce((s, p) => s + p.lucro, 0);
-  const totalFat = data.reduce((s, p) => s + p.preco_venda * p.quantidade, 0);
-  const margem = data.reduce((s, p) => s + p.margem, 0) / data.length;
+  document.getElementById('db-fat').textContent = fmt(fatTotal);
+  document.getElementById('db-lucro').textContent = fmtS(lucroTotal);
+  document.getElementById('db-lucro').style.color = lucroTotal < 0 ? '#f87171' : '#4ade80';
+  document.getElementById('db-margem').textContent = 'Margem: ' + margem.toFixed(1) + '%';
+  document.getElementById('db-cmv').textContent = fmt(cmvTotal + motoTotal);
+  document.getElementById('db-fixo').textContent = fmt(fixoTotal);
+  document.getElementById('db-pedidos').textContent = ped.length;
 
-  document.getElementById('an-pedidos').textContent = data.length;
-  const elLucro = document.getElementById('an-lucro');
-  elLucro.textContent = fmtS(totalLucro);
-  elLucro.className = 'metric-val ' + (totalLucro < 0 ? 'red' : totalLucro < 50 ? 'amber' : 'green');
-  document.getElementById('an-fat').textContent = fmt(totalFat);
-  document.getElementById('an-margem').textContent = margem.toFixed(1) + '%';
-
-  // Gráfico de barras por dia
+  // GRÁFICO BARRAS POR DIA
   const porDia = {};
-  data.forEach(p => {
-    const d = new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    if (!porDia[d]) porDia[d] = { lucro: 0, pedidos: 0 };
-    porDia[d].lucro += p.lucro;
-    porDia[d].pedidos += 1;
+  ped.forEach(p => {
+    const dia = p.created_at.split('T')[0];
+    if (!porDia[dia]) porDia[dia] = { fat: 0, lucro: 0 };
+    porDia[dia].fat += p.preco_venda * p.quantidade;
+    porDia[dia].lucro += p.lucro;
   });
 
-  const dias_arr = Object.keys(porDia);
-  const lucros = dias_arr.map(d => porDia[d].lucro);
-  const maxAbs = Math.max(...lucros.map(Math.abs), 1);
-
-  const chartEl = document.getElementById('chart-dias');
-  if (chartEl) {
-    chartEl.innerHTML = dias_arr.map(d => {
-      const l = porDia[d].lucro;
-      const h = Math.max(Math.round((Math.abs(l) / maxAbs) * 90), 3);
-      const cor = l < 0 ? '#f87171' : l < 10 ? '#fbbf24' : '#4ade80';
-      const valStr = Math.abs(l) >= 100 ? Math.round(l) : l.toFixed(0);
-      return `<div class="bar-col">
-        <div class="bar-val">${valStr}</div>
-        <div class="bar-fill-wrap"><div class="bar" style="height:${h}px;background:${cor};opacity:0.85;width:100%;"></div></div>
-        <div class="bar-label">${d}</div>
+  const graficoEl = document.getElementById('grafico-fat');
+  const diasArr = Object.entries(porDia).sort((a,b) => a[0].localeCompare(b[0]));
+  if (diasArr.length) {
+    const maxFat = Math.max(...diasArr.map(d => d[1].fat));
+    graficoEl.innerHTML = diasArr.map(([data, d]) => {
+      const pct = maxFat > 0 ? Math.max(4, Math.round((d.fat / maxFat) * 80)) : 4;
+      const corBar = d.lucro < 0 ? '#f87171' : '#F97316';
+      const dia = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;">
+        <div style="font-size:8px;color:var(--text3);font-weight:600;">${fmt(d.fat).replace('R$','')}</div>
+        <div style="flex:1;width:100%;display:flex;align-items:flex-end;">
+          <div style="width:100%;height:${pct}%;background:${corBar};border-radius:3px 3px 0 0;min-height:3px;"></div>
+        </div>
+        <div style="font-size:8px;color:var(--text3);white-space:nowrap;">${dia}</div>
       </div>`;
     }).join('');
-  }
-
-  // Comparativo plataformas
-  const ifPed = data.filter(p => p.plataforma_id === PLAT_IFOOD);
-  const p99Ped = data.filter(p => p.plataforma_id === PLAT_99);
-  const ifLucro = ifPed.reduce((s, p) => s + p.lucro, 0);
-  const p99Lucro = p99Ped.reduce((s, p) => s + p.lucro, 0);
-  const ifMargem = ifPed.length ? ifPed.reduce((s, p) => s + p.margem, 0) / ifPed.length : 0;
-  const p99Margem = p99Ped.length ? p99Ped.reduce((s, p) => s + p.margem, 0) / p99Ped.length : 0;
-
-  const eilf = document.getElementById('plat-if-lucro');
-  if(eilf){ eilf.textContent = fmtS(ifLucro); eilf.style.color = ifLucro < 0 ? '#f87171' : '#4ade80'; }
-  const eifp = document.getElementById('plat-if-ped');
-  if(eifp) eifp.textContent = ifPed.length + ' pedidos';
-  const eifm = document.getElementById('plat-if-margem');
-  if(eifm) eifm.textContent = ifMargem.toFixed(1) + '% margem média';
-
-  const e99l = document.getElementById('plat-99-lucro');
-  if(e99l){ e99l.textContent = fmtS(p99Lucro); e99l.style.color = p99Lucro < 0 ? '#f87171' : '#4ade80'; }
-  const e99p = document.getElementById('plat-99-ped');
-  if(e99p) e99p.textContent = p99Ped.length + ' pedidos';
-  const e99m = document.getElementById('plat-99-margem');
-  if(e99m) e99m.textContent = p99Margem.toFixed(1) + '% margem média';
-
-  const insight = document.getElementById('plat-insight');
-  if(insight) {
-    if(ifPed.length && p99Ped.length) {
-      const melhor = p99Margem > ifMargem ? '99Food' : 'iFood';
-      const diff = Math.abs(p99Margem - ifMargem).toFixed(1);
-      insight.textContent = melhor + ' teve ' + diff + '% de margem maior neste período.';
-    } else {
-      insight.textContent = !p99Ped.length ? 'Nenhum pedido do 99Food neste período.' : 'Nenhum pedido do iFood neste período.';
-    }
-  }
-
-  // Donut status
-  const saud = data.filter(p => p.status === 'saudavel').length;
-  const risco = data.filter(p => p.status === 'risco').length;
-  const prej = data.filter(p => p.status === 'prejuizo').length;
-  const total = data.length;
-  const pS = Math.round((saud/total)*100);
-  const pR = Math.round((risco/total)*100);
-  const pP = Math.round((prej/total)*100);
-
-  function arco(pct, offset, cor) {
-    const r=40,cx=50,cy=50,circ=2*Math.PI*r;
-    const dash=(pct/100)*circ,gap=circ-dash;
-    const rot=(offset/100)*360-90;
-    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${cor}" stroke-width="14" stroke-dasharray="${dash} ${gap}" transform="rotate(${rot} ${cx} ${cy})"/>`;
-  }
-
-  const svg = `<svg viewBox="0 0 100 100" width="110" height="110">
-    <circle cx="50" cy="50" r="40" fill="none" stroke="#1a1a1f" stroke-width="14"/>
-    ${pS>0?arco(pS,0,'#4ade80'):''}
-    ${pR>0?arco(pR,pS,'#fbbf24'):''}
-    ${pP>0?arco(pP,pS+pR,'#f87171'):''}
-    <text x="50" y="46" text-anchor="middle" font-size="14" font-weight="600" fill="#f0ede8" font-family="DM Sans">${total}</text>
-    <text x="50" y="60" text-anchor="middle" font-size="8" fill="#5a5855" font-family="DM Sans">pedidos</text>
-  </svg>`;
-
-  // Pedidos no prejuízo com referência
-  const prejPedidos = data.filter(p => p.status === 'prejuizo').slice(0, 5);
-  const prejEl = document.getElementById('analise-prej');
-  if (prejEl) {
-    if (prejPedidos.length) {
-      prejEl.innerHTML = prejPedidos.map(p => {
-        const platNome = p.plataforma_id === PLAT_IFOOD || p.plataforma_id === PLAT_IF_RAIZES || p.plataforma_id === PLAT_IF_VDN ? 'iFood' : '99Food';
-        const ref = p.pedido_ref || '—';
-        const dt = new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-        return `<div class="list-item">
-          <div>
-            <div class="list-title" style="color:var(--red);">${ref} <span style="font-size:11px;color:var(--text3);">${platNome} · ${dt}</span></div>
-            <div class="list-sub">${fmt(p.preco_venda)} vendido · CMV ${fmt(p.custo_producao)}</div>
-          </div>
-          <span style="font-weight:700;color:var(--red);">${fmtS(p.lucro)}</span>
-        </div>`;
-      }).join('');
-    } else {
-      prejEl.innerHTML = '<div class="empty" style="padding:12px 0;">Nenhum pedido com prejuízo no período. 🎉</div>';
-    }
-  }
-
-  const dm = document.getElementById('donut-main');
-  if(dm) dm.innerHTML = `<div class="donut-wrap">${svg}
-    <div class="donut-legend">
-      <div class="donut-item"><div class="donut-dot" style="background:#4ade80;"></div><span class="donut-name">Saudável</span><span class="donut-pct" style="color:#4ade80;">${saud} (${pS}%)</span></div>
-      <div class="donut-item"><div class="donut-dot" style="background:#fbbf24;"></div><span class="donut-name">Risco</span><span class="donut-pct" style="color:#fbbf24;">${risco} (${pR}%)</span></div>
-      <div class="donut-item"><div class="donut-dot" style="background:#f87171;"></div><span class="donut-name">Prejuízo</span><span class="donut-pct" style="color:#f87171;">${prej} (${pP}%)</span></div>
-    </div></div>`;
-}
-
-
-// ===== CAIXA =====
-let caixaPeriodo = 'hoje';
-
-const CATEGORIAS_ENTRADA = [
-  { value: 'repasse_ifood', label: 'Repasse iFood' },
-  { value: 'repasse_99food', label: 'Repasse 99Food' },
-  { value: 'venda_direta', label: 'Venda direta (pix/dinheiro)' },
-  { value: 'outros_entrada', label: 'Outros' },
-];
-
-const CATEGORIAS_SAIDA = [
-  { value: 'insumo_acai', label: 'Insumo — Açaí' },
-  { value: 'insumo_outros', label: 'Insumo — Outros (cremes, frutas)' },
-  { value: 'embalagem', label: 'Embalagem' },
-  { value: 'motoboy', label: 'Operacional — Motoboy' },
-  { value: 'gestao', label: 'Operacional — Gestão' },
-  { value: 'montagem', label: 'Operacional — Montagem/Ajudante' },
-  { value: 'luz', label: 'Operacional — Luz' },
-  { value: 'internet', label: 'Operacional — Internet' },
-  { value: 'aluguel', label: 'Operacional — Aluguel' },
-  { value: 'gasolina', label: 'Transporte — Gasolina' },
-  { value: 'chip_maquininha', label: 'Marketing — Chip/Maquininha' },
-  { value: 'taxa_plataforma', label: 'Marketing — Taxa plataforma' },
-  { value: 'construcao', label: 'Construção/Equipamentos — Unidade' },
-  { value: 'pessoal_alimentacao', label: 'Pessoal — Alimentação' },
-  { value: 'pessoal_saude', label: 'Pessoal — Saúde' },
-  { value: 'pessoal_lazer', label: 'Pessoal — Lazer' },
-  { value: 'pessoal_vestuario', label: 'Pessoal — Vestuário' },
-  { value: 'pessoal_transporte', label: 'Pessoal — Transporte próprio' },
-  { value: 'pessoal_moradia', label: 'Pessoal — Moradia' },
-  { value: 'pessoal_outros', label: 'Pessoal — Outros gastos pessoais' },
-  { value: 'outros_saida', label: 'Outros' },
-];
-
-function setCaixaPeriodo(p, btn) {
-  caixaPeriodo = p;
-  document.querySelectorAll('.periodo-chip').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  carregarCaixa();
-}
-
-function getPeriodoFiltro() {
-  const hoje = new Date();
-  if (caixaPeriodo === 'hoje') {
-    return hoje.toISOString().split('T')[0];
-  } else if (caixaPeriodo === 'semana') {
-    const d = new Date(hoje);
-    d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
   } else {
-    const d = new Date(hoje);
-    d.setDate(1);
-    return d.toISOString().split('T')[0];
-  }
-}
-
-async function carregarCaixa() {
-  const inicio = getPeriodoFiltro();
-  
-  const { data } = await db.from('caixa')
-    .select('*')
-    .gte('data', inicio)
-    .order('created_at', { ascending: false });
-
-  const lancamentos = data || [];
-
-  // Saldo total (todos os tempos)
-  const { data: todos } = await db.from('caixa').select('tipo, valor');
-  const saldoTotal = (todos || []).reduce((s, l) => 
-    l.tipo === 'entrada' ? s + l.valor : s - l.valor, 0);
-
-  // Saldo card
-  const saldoEl = document.getElementById('caixa-saldo');
-  saldoEl.textContent = fmtS(saldoTotal);
-  saldoEl.style.color = saldoTotal < 0 ? 'var(--red)' : saldoTotal < 100 ? 'var(--amber)' : 'var(--green)';
-  
-  const periodoLabel = caixaPeriodo === 'hoje' ? 'hoje' : caixaPeriodo === 'semana' ? 'últimos 7 dias' : 'este mês';
-  document.getElementById('caixa-saldo-sub').textContent = `Movimentações: ${periodoLabel}`;
-
-  // DRE do período
-  const entradas = lancamentos.filter(l => l.tipo === 'entrada');
-  const saidas = lancamentos.filter(l => l.tipo === 'saida');
-  const totalEntrada = entradas.reduce((s, l) => s + l.valor, 0);
-  const totalCMV = saidas.filter(l => l.categoria.startsWith('insumo') || l.categoria === 'embalagem').reduce((s, l) => s + l.valor, 0);
-  const totalOp = saidas.filter(l => !l.categoria.startsWith('insumo') && l.categoria !== 'embalagem').reduce((s, l) => s + l.valor, 0);
-  const lucroLiq = totalEntrada - totalCMV - totalOp;
-  const margemLiq = totalEntrada > 0 ? (lucroLiq / totalEntrada * 100) : 0;
-
-  document.getElementById('dre-receita').textContent = fmt(totalEntrada);
-  document.getElementById('dre-cmv').textContent = fmt(totalCMV);
-  document.getElementById('dre-op').textContent = fmt(totalOp);
-  const dreEl = document.getElementById('dre-lucro');
-  dreEl.textContent = fmtS(lucroLiq);
-  dreEl.className = 'metric-val ' + (lucroLiq < 0 ? 'red' : lucroLiq < 50 ? 'amber' : 'green');
-
-  const barraWidth = totalEntrada > 0 ? Math.max(0, Math.min(100, margemLiq)) : 0;
-  document.getElementById('dre-barra-fill').style.width = barraWidth + '%';
-  document.getElementById('dre-barra-fill').style.background = lucroLiq < 0 ? 'var(--red)' : lucroLiq < 50 ? 'var(--amber)' : 'var(--green)';
-  document.getElementById('dre-margem-txt').textContent = totalEntrada > 0 ? `Margem líquida: ${margemLiq.toFixed(1)}%` : '';
-
-  // Por categoria
-  const porCat = {};
-  lancamentos.forEach(l => {
-    const key = l.tipo + '_' + l.categoria;
-    if (!porCat[key]) porCat[key] = { tipo: l.tipo, categoria: l.categoria, total: 0, count: 0 };
-    porCat[key].total += l.valor;
-    porCat[key].count += 1;
-  });
-
-  const getCatLabel = (tipo, cat) => {
-    const lista = tipo === 'entrada' ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA;
-    return lista.find(c => c.value === cat)?.label || cat;
-  };
-
-  const catEl = document.getElementById('caixa-categorias');
-  if (!Object.keys(porCat).length) {
-    catEl.innerHTML = '<div class="empty">Nenhum lançamento no período.</div>';
-  } else {
-    catEl.innerHTML = Object.values(porCat)
-      .sort((a, b) => b.total - a.total)
-      .map(c => `
-        <div class="list-item">
-          <div>
-            <div class="list-title">${getCatLabel(c.tipo, c.categoria)}</div>
-            <div class="list-sub">${c.count} lançamento${c.count > 1 ? 's' : ''}</div>
-          </div>
-          <span style="font-weight:600;color:${c.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">
-            ${c.tipo === 'entrada' ? '+' : '−'}${fmt(c.total)}
-          </span>
-        </div>`).join('');
+    graficoEl.innerHTML = '<div class="empty" style="padding:12px 0;width:100%;">Importe relatórios para ver o gráfico.</div>';
   }
 
-  // Histórico
-  const histEl = document.getElementById('caixa-historico');
-  if (!lancamentos.length) {
-    histEl.innerHTML = '<div class="empty">Nenhum lançamento no período.</div>';
-  } else {
-    histEl.innerHTML = lancamentos.slice(0, 20).map(l => {
-      const label = getCatLabel(l.tipo, l.categoria);
-      const data = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      return `<div class="list-item" id="lanc-${l.id}">
-        <div style="flex:1;">
-          <div class="list-title">${l.descricao || label}</div>
-          <div class="list-sub">${label} · ${data}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-weight:700;color:${l.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">
-            ${l.tipo === 'entrada' ? '+' : '−'}${fmt(l.valor)}
-          </span>
-          <button onclick="excluirLancamento('${l.id}')" style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;">×</button>
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  // Custos fixos
-  carregarCustosFixos();
-}
-
-async function carregarCustosFixos() {
-  const { data } = await db.from('custos_fixos').select('*').eq('ativo', true).order('nome');
-  const el = document.getElementById('custos-fixos-lista');
-  if (!data || !data.length) {
-    el.innerHTML = '<div class="empty">Nenhum custo fixo cadastrado.</div>';
-    return;
-  }
-  const total = data.reduce((s, c) => s + c.valor, 0);
-  el.innerHTML = data.map(c => `
-    <div class="list-item">
-      <div>
-        <div class="list-title">${c.nome}</div>
-        <div class="list-sub">${c.categoria} · vence dia ${c.dia_vencimento || '—'}</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-weight:600;color:var(--red);">${fmt(c.valor)}</div>
-        <button class="btn-del" style="margin-top:4px;" onclick="excluirCustoFixo('${c.id}')">Excluir</button>
-      </div>
-    </div>`).join('') + 
-    `<div style="display:flex;justify-content:space-between;padding:10px 0;font-weight:600;border-top:1px solid var(--border);margin-top:4px;">
-      <span>Total mensal fixo</span>
-      <span style="color:var(--red);">${fmt(total)}</span>
-    </div>`;
-}
-
-function abrirLancamento(tipo) {
-  document.getElementById('lanc-tipo').value = tipo;
-  document.getElementById('modal-lanc-titulo').textContent = tipo === 'entrada' ? '+ Nova entrada' : '− Nova saída';
-  const sel = document.getElementById('lanc-categoria');
-  const lista = tipo === 'entrada' ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA;
-  sel.innerHTML = '<option value="">Selecione...</option>' + lista.map(c => `<option value="${c.value}">${c.label}</option>`).join('');
-  document.getElementById('lanc-valor').value = '';
-  document.getElementById('lanc-desc').value = '';
-  document.getElementById('lanc-data').value = new Date().toISOString().split('T')[0];
-  document.getElementById('modal-lancamento').classList.add('open');
-}
-
-async function excluirLancamento(id) {
-  if (!confirm('Excluir este lançamento?')) return;
-  const { error } = await db.from('caixa').delete().eq('id', id);
-  if (!error) {
-    const el = document.getElementById('lanc-' + id);
-    if (el) el.remove();
-    await carregarCaixa();
-    await carregarSaldoDash();
-    await carregarLancamentosDash();
-  }
-}
-
-async function salvarLancamento() {
-  const tipo = document.getElementById('lanc-tipo').value;
-  const categoria = document.getElementById('lanc-categoria').value;
-  const descricao = document.getElementById('lanc-desc').value;
-  const valorStr = document.getElementById('lanc-valor').value.trim();
-  let valorRaw;
-  if (valorStr.includes(',')) {
-    // formato brasileiro: 2100,09
-    valorRaw = valorStr.replace(/\./g,'').replace(',','.');
-  } else if (valorStr.includes('.')) {
-    // formato americano: 2100.09
-    valorRaw = valorStr;
-  } else {
-    // só números: 2100
-    valorRaw = valorStr;
-  }
-  const valor = parseFloat(valorRaw);
-  const dataInput = document.getElementById('lanc-data').value;
-  
-  if (!categoria) { alert('Selecione uma categoria.'); return; }
-  if (!valor || valor <= 0) { alert('Informe o valor.'); return; }
-  if (!dataInput) { alert('Informe a data.'); return; }
-
-  // Garantir formato ISO YYYY-MM-DD
-  let data = dataInput;
-  if (dataInput.includes('/')) {
-    const partes = dataInput.split('/');
-    data = `${partes[2]}-${partes[1]}-${partes[0]}`;
-  }
-
-  const { error } = await db.from('caixa').insert({ 
-    tipo, categoria, 
-    descricao: descricao || null, 
-    valor, 
-    data 
-  });
-  
-  if (error) {
-    console.error('Erro ao salvar:', error);
-    alert('Erro ao salvar: ' + error.message);
-  } else {
-    fecharModal('modal-lancamento');
-    await carregarCaixa();
-  }
-}
-
-function abrirCustoFixo() {
-  document.getElementById('cf-id').value = '';
-  document.getElementById('cf-nome').value = '';
-  document.getElementById('cf-valor').value = '';
-  document.getElementById('cf-dia').value = '';
-  document.getElementById('modal-custo-fixo').classList.add('open');
-}
-
-async function salvarCustoFixo() {
-  const nome = document.getElementById('cf-nome').value.trim();
-  const categoria = document.getElementById('cf-categoria').value;
-  const valor = parseFloat(document.getElementById('cf-valor').value);
-  const dia = parseInt(document.getElementById('cf-dia').value) || null;
-  if (!nome) { alert('Digite o nome.'); return; }
-  if (!valor || valor <= 0) { alert('Informe o valor.'); return; }
-  await db.from('custos_fixos').insert({ nome, categoria, valor, dia_vencimento: dia });
-  fecharModal('modal-custo-fixo');
-  await carregarCustosFixos();
-}
-
-async function excluirCustoFixo(id) {
-  if (!confirm('Excluir este custo fixo?')) return;
-  await db.from('custos_fixos').update({ ativo: false }).eq('id', id);
-  await carregarCustosFixos();
-}
-
-
-// ===== PERSONALIDADE DO DIA =====
-const DIAS_CONFIG = {
-  0: { emoji: '👑', nome: 'Domingo é Rei', meta: 30, desc: 'Dia máximo — bater recorde', cor: '#F97316' },
-  1: { emoji: '📊', nome: 'Início da semana', meta: 10, desc: 'Analisar o fim de semana e planejar', cor: '#6B6560' },
-  2: { emoji: '💰', nome: 'Dia do repasse', meta: 8, desc: 'iFood e 99Food caem hoje', cor: '#16A34A' },
-  3: { emoji: '🗂️', nome: 'Organiza o caixa', meta: 11, desc: 'Repasse confirmado — pagar contas e repor insumos', cor: '#2563EB' },
-  4: { emoji: '💪', nome: 'Quinta forte', meta: 16, desc: 'Volume subindo — atenção total', cor: '#D97706' },
-  5: { emoji: '🚀', nome: 'Pré-pico', meta: 15, desc: 'Estoque em dia — preparar para o fim de semana', cor: '#F97316' },
-  6: { emoji: '⛏️', nome: 'Dia de cavar ouro', meta: 22, desc: 'Volume alto — foco na operação', cor: '#F97316' },
-};
-
-function renderDiaPersonalidade() {
-  const dia = new Date().getDay();
-  const config = DIAS_CONFIG[dia];
-  const el = document.getElementById('dia-personalidade');
-  if(el) el.textContent = config.emoji + ' ' + config.nome;
-}
-
-async function carregarSaldoDash() {
-  const { data: todos } = await db.from('caixa').select('tipo, valor');
-  const saldo = (todos || []).reduce((s, l) => l.tipo === 'entrada' ? s + l.valor : s - l.valor, 0);
-  const el = document.getElementById('dash-saldo');
-  if(el) {
-    el.textContent = fmtS(saldo);
-    el.style.color = saldo < 0 ? '#f87171' : saldo < 100 ? '#fbbf24' : '#F97316';
-  }
-}
-
-async function carregarLancamentosDash() {
-  const { data } = await db.from('caixa').select('*').order('created_at', { ascending: false }).limit(4);
-  const el = document.getElementById('dash-lancamentos');
-  if(!data || !data.length) { el.innerHTML = '<div class="empty" style="padding:16px 0;">Nenhum lançamento ainda.</div>'; return; }
-  const getCatLabel = (tipo, cat) => {
-    const lista = tipo === 'entrada' ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA;
-    return lista?.find(c => c.value === cat)?.label || cat;
-  };
-  el.innerHTML = data.map(l => {
-    const dt = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    return `<div class="list-item">
-      <div>
-        <div class="list-title">${l.descricao || getCatLabel(l.tipo, l.categoria)}</div>
-        <div class="list-sub">${dt}</div>
-      </div>
-      <span style="font-weight:700;color:${l.tipo === 'entrada' ? 'var(--green)' : 'var(--red)'};">${l.tipo === 'entrada' ? '+' : '−'}${fmt(l.valor)}</span>
-    </div>`;
-  }).join('');
-}
-
-function renderAlertas() {
-  const alertas = [];
-  const dia = new Date().getDay();
-  
-  // Alerta específico do dia
-  if(dia === 2) alertas.push({ cor: '#16A34A', txt: 'Dia do repasse — confira se os valores caíram nas plataformas' });
-  if(dia === 3) alertas.push({ cor: '#2563EB', txt: 'Organize o caixa hoje — pague contas e faça a reposição de insumos' });
-  if(dia === 0 || dia === 6) alertas.push({ cor: '#F97316', txt: 'Fim de semana — garanta estoque suficiente para o pico de pedidos' });
-  
-  // Alerta de preço
-  alertas.push({ cor: '#DC2626', txt: '330ml iFood ainda abaixo do preço ideal — reajuste pendente' });
-
-  const box = document.getElementById('dash-alertas');
-  const lista = document.getElementById('dash-alertas-lista');
-  if(alertas.length && box && lista) {
-    box.style.display = 'block';
-    lista.innerHTML = alertas.map(a => `
-      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);">
-        <div style="width:8px;height:8px;border-radius:50%;background:${a.cor};flex-shrink:0;margin-top:4px;"></div>
-        <div style="font-size:13px;color:var(--text2);line-height:1.5;">${a.txt}</div>
-      </div>`).join('');
-  }
-}
-
-
-// ===== HOJE =====
-async function carregarHoje() {
-  const hoje = new Date();
-  const dataHoje = hoje.toISOString().split('T')[0];
-  // Turno começa às 18h do dia anterior se for antes das 6h
-  const hora = hoje.getHours();
-  let dataInicio;
-  if (hora < 6) {
-    const ontem = new Date(hoje);
-    ontem.setDate(ontem.getDate() - 1);
-    dataInicio = ontem.toISOString().split('T')[0] + 'T18:00:00';
-  } else {
-    dataInicio = dataHoje + 'T00:00:00';
-  }
-
-  document.getElementById('hoje-data').textContent = 
-    hoje.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-
-  // Buscar pedidos do dia/turno
-  const { data: pedidos } = await db.from('pedidos')
-    .select('*')
-    .gte('created_at', dataInicio)
-    .order('created_at', { ascending: false });
-
-  // Se não tem pedidos de hoje busca os últimos importados
-  let ped = pedidos || [];
-  if (!ped.length) {
-    const { data: ultimos } = await db.from('pedidos')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (ultimos && ultimos.length) {
-      // Pegar a data do mais recente
-      const dataRecente = ultimos[0].created_at.split('T')[0];
-      ped = ultimos.filter(p => p.created_at.startsWith(dataRecente));
-    }
-  }
-
-  if (!ped.length) return;
-
-  // Totais
-  const totalFat = ped.reduce((s,p) => s + p.preco_venda * p.quantidade, 0);
-  const totalLucro = ped.reduce((s,p) => s + p.lucro, 0);
-  const totalTaxa = ped.reduce((s,p) => s + p.taxa_plataforma * p.quantidade, 0);
-  const totalRecebido = totalFat - totalTaxa;
-  const margem = totalFat > 0 ? (totalLucro / totalFat * 100) : 0;
-
-  document.getElementById('hoje-faturado').textContent = fmt(totalFat);
-  document.getElementById('hoje-recebido').textContent = fmt(totalRecebido);
-  document.getElementById('hoje-lucro').textContent = fmtS(totalLucro);
-  document.getElementById('hoje-lucro').style.color = totalLucro < 0 ? '#f87171' : '#4ade80';
-  document.getElementById('hoje-pedidos-total').textContent = ped.length + ' pedidos';
-  const mb = document.getElementById('hoje-margem-badge');
-  mb.textContent = margem.toFixed(1) + '% margem';
-  mb.style.color = margem < 0 ? '#f87171' : margem < 15 ? '#fbbf24' : '#4ade80';
-  mb.style.background = margem < 0 ? 'rgba(248,113,113,0.15)' : margem < 15 ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)';
-
-  // Por plataforma
+  // POR PLATAFORMA
   const platMap = {
-    [PLAT_IFOOD]: { nome: 'iFood', cor: '#E85C30', taxa: 0.152 },
-    [PLAT_99]: { nome: '99Food', cor: '#F5A623', taxa: 0.032 },
-    [PLAT_IF_VDN]: { nome: 'iFood VDN', cor: '#E85C30', taxa: 0.302 },
-    [PLAT_99_VDN]: { nome: '99Food VDN', cor: '#F5A623', taxa: 0.032 },
-    [PLAT_IF_RAIZES]: { nome: 'iFood Raízes', cor: '#E85C30', taxa: 0.152 },
-    [PLAT_99_RAIZES]: { nome: '99Food Raízes', cor: '#F5A623', taxa: 0.032 },
+    [PLAT_IF_RAIZES]: { nome: 'iFood Raízes', cor: '#E85C30' },
+    [PLAT_99_RAIZES]: { nome: '99Food Raízes', cor: '#F5A623' },
+    [PLAT_IF_VDN]: { nome: 'iFood Vem do Norte', cor: '#E85C30' },
+    [PLAT_99_VDN]: { nome: '99Food Vem do Norte', cor: '#F5A623' },
   };
-
   const porPlat = {};
   ped.forEach(p => {
     const k = p.plataforma_id;
-    if (!porPlat[k]) porPlat[k] = { pedidos: 0, faturado: 0, lucro: 0, taxa: 0 };
-    porPlat[k].pedidos += 1;
+    if (!porPlat[k]) porPlat[k] = { pedidos: 0, faturado: 0, lucro: 0 };
+    porPlat[k].pedidos++;
     porPlat[k].faturado += p.preco_venda * p.quantidade;
     porPlat[k].lucro += p.lucro;
-    porPlat[k].taxa += p.taxa_plataforma * p.quantidade;
   });
 
-  const platEl = document.getElementById('hoje-por-plat');
-  platEl.innerHTML = Object.entries(porPlat).map(([id, d]) => {
-    const info = platMap[id] || { nome: 'Plataforma', cor: '#888' };
-    const mg = d.faturado > 0 ? (d.lucro / d.faturado * 100) : 0;
-    const cls = d.lucro < 0 ? 'var(--red)' : d.lucro < 50 ? 'var(--amber)' : 'var(--green)';
-    return `<div class="list-item">
-      <div>
-        <div class="list-title" style="color:${info.cor};">${info.nome}</div>
-        <div class="list-sub">${d.pedidos} pedidos · ${fmt(d.faturado)} faturado</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-weight:700;color:${cls};">${fmtS(d.lucro)}</div>
-        <div style="font-size:11px;color:var(--text3);">${mg.toFixed(1)}% margem</div>
-      </div>
-    </div>`;
-  }).join('') || '<div class="empty" style="padding:12px 0;">Sem dados.</div>';
-
-  // Por loja
-  const lojaMap = {
-    [LOJA_RAIZES]: 'Raízes de Açaí',
-    [LOJA_VEMDONORTE]: 'Vem do Norte',
-    '11111111-1111-1111-1111-111111111111': 'Raízes de Açaí',
-    '22222222-2222-2222-2222-111111111111': 'Vem do Norte',
-  };
-
-  const porLoja = {};
-  ped.forEach(p => {
-    const k = p.loja_id;
-    if (!porLoja[k]) porLoja[k] = { pedidos: 0, faturado: 0, lucro: 0 };
-    porLoja[k].pedidos += 1;
-    porLoja[k].faturado += p.preco_venda * p.quantidade;
-    porLoja[k].lucro += p.lucro;
-  });
-
-  const lojaEl = document.getElementById('hoje-por-loja');
-  lojaEl.innerHTML = Object.entries(porLoja).map(([id, d]) => {
-    const nome = lojaMap[id] || 'Loja';
-    const mg = d.faturado > 0 ? (d.lucro / d.faturado * 100) : 0;
-    const cls = d.lucro < 0 ? 'var(--red)' : d.lucro < 50 ? 'var(--amber)' : 'var(--green)';
-    const pct = totalLucro > 0 ? Math.round((d.lucro / totalLucro) * 100) : 0;
-    return `<div class="list-item">
-      <div style="flex:1;">
-        <div class="list-title">${nome}</div>
-        <div class="list-sub">${d.pedidos} pedidos · ${mg.toFixed(1)}% margem</div>
-        <div style="height:4px;background:var(--bg3);border-radius:2px;margin-top:6px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:var(--orange);border-radius:2px;"></div>
+  const platEl = document.getElementById('analise-plat');
+  if (!Object.keys(porPlat).length) {
+    platEl.innerHTML = '<div class="empty">Importe um relatório para ver.</div>';
+  } else {
+    platEl.innerHTML = Object.entries(porPlat).map(([id, d]) => {
+      const info = platMap[id] || { nome: 'Plataforma', cor: '#888' };
+      const mg = d.faturado > 0 ? (d.lucro / d.faturado * 100) : 0;
+      const pct = fatTotal > 0 ? Math.round(d.faturado / fatTotal * 100) : 0;
+      return `<div class="list-item">
+        <div style="flex:1;">
+          <div class="list-title" style="color:${info.cor};">${info.nome}</div>
+          <div class="list-sub">${d.pedidos} pedidos · ${mg.toFixed(1)}% margem</div>
+          <div style="height:4px;background:var(--bg3);border-radius:2px;margin-top:5px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${info.cor};border-radius:2px;"></div>
+          </div>
         </div>
-      </div>
-      <div style="text-align:right;margin-left:12px;">
-        <div style="font-weight:700;color:${cls};">${fmtS(d.lucro)}</div>
-        <div style="font-size:11px;color:var(--text3);">${pct}% do total</div>
-      </div>
-    </div>`;
-  }).join('') || '<div class="empty" style="padding:12px 0;">Sem dados.</div>';
-
-  // Melhor e pior pedido
-  const melhor = ped.reduce((a,b) => b.lucro > a.lucro ? b : a, ped[0]);
-  const pior = ped.reduce((a,b) => b.lucro < a.lucro ? b : a, ped[0]);
-  document.getElementById('hoje-melhor').textContent = fmtS(melhor.lucro);
-  document.getElementById('hoje-melhor-sub').textContent = fmt(melhor.preco_venda) + (melhor.pedido_ref ? ' · ' + melhor.pedido_ref : '') + ' · ' + melhor.distancia_km + 'km';
-  document.getElementById('hoje-pior').textContent = fmtS(pior.lucro);
-  document.getElementById('hoje-pior-sub').textContent = fmt(pior.preco_venda) + (pior.pedido_ref ? ' · ' + pior.pedido_ref : '') + ' · ' + pior.distancia_km + 'km';
-
-  // Insights automáticos
-  const insights = [];
-  const platArr = Object.entries(porPlat);
-  if (platArr.length >= 2) {
-    const sorted = platArr.sort((a,b) => {
-      const mgA = a[1].faturado > 0 ? a[1].lucro/a[1].faturado : 0;
-      const mgB = b[1].faturado > 0 ? b[1].lucro/b[1].faturado : 0;
-      return mgB - mgA;
-    });
-    const melhorPlat = platMap[sorted[0][0]]?.nome || 'Melhor plataforma';
-    const piorPlat = platMap[sorted[sorted.length-1][0]]?.nome || 'Pior plataforma';
-    const mgMelhor = sorted[0][1].faturado > 0 ? (sorted[0][1].lucro/sorted[0][1].faturado*100).toFixed(1) : 0;
-    const mgPior = sorted[sorted.length-1][1].faturado > 0 ? (sorted[sorted.length-1][1].lucro/sorted[sorted.length-1][1].faturado*100).toFixed(1) : 0;
-    insights.push({ cor: 'var(--green)', txt: `${melhorPlat} performou melhor hoje — margem de ${mgMelhor}% vs ${mgPior}% do ${piorPlat}.` });
+        <div style="text-align:right;margin-left:12px;">
+          <div style="font-weight:700;color:var(--text);">${fmt(d.faturado)}</div>
+          <div style="font-size:11px;color:${d.lucro<0?'var(--red)':'var(--green)'};">${fmtS(d.lucro)}</div>
+        </div>
+      </div>`;
+    }).join('');
   }
 
-  const saud = ped.filter(p=>p.status==='saudavel').length;
-  const prej = ped.filter(p=>p.status==='prejuizo').length;
-  const pctSaud = Math.round(saud/ped.length*100);
-  if (pctSaud >= 70) insights.push({ cor: 'var(--green)', txt: `${pctSaud}% dos pedidos foram saudáveis hoje. Bom dia!` });
-  else if (prej > saud) insights.push({ cor: 'var(--red)', txt: `${prej} pedidos com prejuízo hoje. Verifique as promoções ativas.` });
+  // DESPESAS POR CATEGORIA
+  const porCat = {};
+  saidas.forEach(l => {
+    const label = CATEGORIAS_SAIDA?.find(c=>c.value===l.categoria)?.label || l.categoria;
+    if (!porCat[label]) porCat[label] = 0;
+    porCat[label] += l.valor;
+  });
 
-  const ticketMedio = totalFat / ped.length;
-  if (ticketMedio < 25) insights.push({ cor: 'var(--amber)', txt: `Ticket médio baixo: ${fmt(ticketMedio)}. Clientes comprando copos pequenos ou com muito desconto.` });
-  else if (ticketMedio > 45) insights.push({ cor: 'var(--green)', txt: `Ticket médio excelente: ${fmt(ticketMedio)}. Clientes comprando bem!` });
+  const despEl = document.getElementById('analise-desp');
+  if (!Object.keys(porCat).length) {
+    despEl.innerHTML = '<div class="empty">Lance saídas no caixa para ver.</div>';
+  } else {
+    const maxDesp = Math.max(...Object.values(porCat));
+    despEl.innerHTML = Object.entries(porCat).sort((a,b) => b[1]-a[1]).map(([cat, val]) => {
+      const pct = Math.round((val / maxDesp) * 100);
+      return `<div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+          <div style="font-size:12px;color:var(--text2);font-weight:500;">${cat}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--red);">${fmt(val)}</div>
+        </div>
+        <div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:var(--red);border-radius:3px;"></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
 
-  const insightCard = document.getElementById('hoje-insight-card');
-  const insightEl = document.getElementById('hoje-insights');
-  if (insights.length) {
-    insightCard.style.display = 'block';
-    insightEl.innerHTML = insights.map(i => `
-      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);">
-        <div style="width:8px;height:8px;border-radius:50%;background:${i.cor};flex-shrink:0;margin-top:4px;"></div>
-        <div style="font-size:13px;color:var(--text2);line-height:1.5;">${i.txt}</div>
-      </div>`).join('');
+  // PEDIDOS NO PREJUÍZO
+  const prejPedidos = ped.filter(p => p.status === 'prejuizo').slice(0, 5);
+  const prejEl = document.getElementById('analise-prej');
+  if (prejPedidos.length) {
+    prejEl.innerHTML = prejPedidos.map(p => {
+      const platNome = [PLAT_IF_RAIZES, PLAT_IF_VDN].includes(p.plataforma_id) ? 'iFood' : '99Food';
+      const ref = p.pedido_ref || '—';
+      const dt = new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      return `<div class="list-item">
+        <div>
+          <div class="list-title" style="color:var(--red);">${ref} <span style="font-size:11px;color:var(--text3);">${platNome} · ${dt}</span></div>
+          <div class="list-sub">${fmt(p.preco_venda)} vendido · CMV ${fmt(p.custo_producao)}</div>
+        </div>
+        <span style="font-weight:700;color:var(--red);">${fmtS(p.lucro)}</span>
+      </div>`;
+    }).join('');
+  } else {
+    prejEl.innerHTML = '<div class="empty" style="padding:12px 0;">Nenhum pedido com prejuízo. 🎉</div>';
   }
 }
 
