@@ -1670,21 +1670,19 @@ function renderPrecos(id,cmv,margemAlvo,tam){
 async function salvarProduto(id){
   const tamEl=document.getElementById(`tam-${id}`);
   const cmvEl=document.getElementById(`cmv-${id}`);
-  if(!tamEl||!cmvEl){showToast('Erro: campos não encontrados','red');return;}
+  if(!tamEl||!cmvEl){mostrarToast('Erro: campos não encontrados','red');return;}
   const tam=tamEl.value.trim();
-  // Trata "6,02" → 6.02 e "6.02" → 6.02
   const cmvRaw=cmvEl.value.trim().replace(',','.');
   const cmv=parseFloat(cmvRaw)||0;
-  if(cmv<=0&&!tam){showToast('Informe pelo menos o tamanho ou o CMV','amber');return;}
+  if(cmv<=0&&!tam){mostrarToast('Informe o tamanho ou o CMV','red');return;}
   const updates={};
   if(tam)updates.quantidade_embalagem=tam;
   if(cmv>0)updates.custo_por_unidade=cmv;
   console.log('Salvando produto',id,updates);
-  const{data,error}=await db.from('produtos').update(updates).eq('id',id).select();
-  console.log('Resultado:',data,error);
-  if(error){showToast('Erro: '+error.message,'red');return;}
-  if(!data||data.length===0){showToast('Nenhum registro atualizado — verifique o ID','red');return;}
-  showToast('Produto atualizado! ✅','green');
+  const{error}=await db.from('produtos').update(updates).eq('id',id);
+  console.log('Erro Supabase:',error);
+  if(error){mostrarToast('Erro Supabase: '+error.message,'red');return;}
+  mostrarToast('Produto atualizado! ✅','green');
   carregarAdminProdutos();
 }
 
