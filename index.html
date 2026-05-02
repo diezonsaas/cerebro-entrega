@@ -1505,8 +1505,40 @@ async function carregarAdminProdutos(){
     });
   }
 
-  el.innerHTML=`<div style="margin-bottom:12px;font-size:12px;color:var(--text3);">${data.length} produtos cadastrados</div>`+
-  Object.entries(grupos).map(([nome,prods])=>{
+  // Ordenação dos grupos
+  const ordemEl=document.getElementById('prod-ordem');
+  const ordem=ordemEl?ordemEl.value:'nome';
+
+  let entradasGrupos=Object.entries(grupos);
+  if(ordem==='nome')entradasGrupos.sort((a,b)=>a[0].localeCompare(b[0]));
+  else if(ordem==='nome_desc')entradasGrupos.sort((a,b)=>b[0].localeCompare(a[0]));
+  else if(ordem==='cmv_asc')entradasGrupos.sort((a,b)=>{
+    const ma=Math.min(...a[1].map(p=>p.custo_por_unidade||999));
+    const mb=Math.min(...b[1].map(p=>p.custo_por_unidade||999));
+    return ma-mb;
+  });
+  else if(ordem==='cmv_desc')entradasGrupos.sort((a,b)=>{
+    const ma=Math.max(...a[1].map(p=>p.custo_por_unidade||0));
+    const mb=Math.max(...b[1].map(p=>p.custo_por_unidade||0));
+    return mb-ma;
+  });
+  else if(ordem==='sem_cmv')entradasGrupos.sort((a,b)=>{
+    const temA=a[1].some(p=>p.custo_por_unidade>0)?1:0;
+    const temB=b[1].some(p=>p.custo_por_unidade>0)?1:0;
+    return temA-temB;
+  });
+
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <span style="font-size:12px;color:var(--text3);">${data.length} produtos cadastrados</span>
+    <select id="prod-ordem" onchange="carregarAdminProdutos()" style="font-size:12px;padding:5px 10px;width:auto;border-radius:20px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);">
+      <option value="nome" ${ordem==='nome'?'selected':''}>A → Z</option>
+      <option value="nome_desc" ${ordem==='nome_desc'?'selected':''}>Z → A</option>
+      <option value="cmv_asc" ${ordem==='cmv_asc'?'selected':''}>CMV menor primeiro</option>
+      <option value="cmv_desc" ${ordem==='cmv_desc'?'selected':''}>CMV maior primeiro</option>
+      <option value="sem_cmv" ${ordem==='sem_cmv'?'selected':''}>Sem CMV primeiro</option>
+    </select>
+  </div>`;
+  el.innerHTML+=entradasGrupos.map(([nome,prods])=>{
     const ordenados=ordenarTamanho(prods);
     return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden;">
       <div style="background:var(--bg3);padding:10px 14px;border-bottom:1px solid var(--border);">
@@ -1638,15 +1670,22 @@ function renderPrecos(id,cmv,margemAlvo,tam){
 async function salvarProduto(id){
   const tamEl=document.getElementById(`tam-${id}`);
   const cmvEl=document.getElementById(`cmv-${id}`);
+  if(!tamEl||!cmvEl){showToast('Erro: campos não encontrados','red');return;}
   const tam=tamEl.value.trim();
-  const cmvRaw=cmvEl.value.replace(',','.');
+  // Trata "6,02" → 6.02 e "6.02" → 6.02
+  const cmvRaw=cmvEl.value.trim().replace(',','.');
   const cmv=parseFloat(cmvRaw)||0;
+  if(cmv<=0&&!tam){showToast('Informe pelo menos o tamanho ou o CMV','amber');return;}
   const updates={};
   if(tam)updates.quantidade_embalagem=tam;
-  updates.custo_por_unidade=cmv;
-  const{error}=await db.from('produtos').update(updates).eq('id',id);
-  if(error){showToast('Erro ao salvar: '+error.message,'red');}
-  else{showToast('Produto atualizado! ✅','green');carregarAdminProdutos();}
+  if(cmv>0)updates.custo_por_unidade=cmv;
+  console.log('Salvando produto',id,updates);
+  const{data,error}=await db.from('produtos').update(updates).eq('id',id).select();
+  console.log('Resultado:',data,error);
+  if(error){showToast('Erro: '+error.message,'red');return;}
+  if(!data||data.length===0){showToast('Nenhum registro atualizado — verifique o ID','red');return;}
+  showToast('Produto atualizado! ✅','green');
+  carregarAdminProdutos();
 }
 
 async function carregarAdminInsumos(){
