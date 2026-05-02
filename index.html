@@ -1485,20 +1485,168 @@ async function carregarAdminProdutos(){
   const{data}=await db.from('produtos').select('*').order('nome');
   const el=document.getElementById('admin-produtos');
   if(!data||!data.length){el.innerHTML='<div class="empty">Nenhum produto cadastrado.</div>';return;}
+
+  // Agrupa por nome base
+  const grupos={};
+  data.forEach(p=>{
+    const base=p.nome;
+    if(!grupos[base])grupos[base]=[];
+    grupos[base].push(p);
+  });
+
+  const TAMANHOS_ORDER=['330ml','550ml','770ml','330','550','770'];
+  function ordenarTamanho(arr){
+    return arr.sort((a,b)=>{
+      const ta=(a.tamanho||a.quantidade_embalagem||'').toString().toLowerCase();
+      const tb=(b.tamanho||b.quantidade_embalagem||'').toString().toLowerCase();
+      const ia=TAMANHOS_ORDER.findIndex(t=>ta.includes(t));
+      const ib=TAMANHOS_ORDER.findIndex(t=>tb.includes(t));
+      return(ia===-1?99:ia)-(ib===-1?99:ib);
+    });
+  }
+
   el.innerHTML=`<div style="margin-bottom:12px;font-size:12px;color:var(--text3);">${data.length} produtos cadastrados</div>`+
-  data.map(p=>{
-    const cmv=p.custo_por_unidade||0;
-    return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:6px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:600;">${p.nome}</div>
-          <div style="font-size:12px;color:var(--text3);">Unidade: ${p.unidade||'—'} · Emb: ${p.quantidade_embalagem||'—'}</div>
-          <div style="font-size:12px;color:var(--text3);">CMV por unidade: ${fmt(cmv)}</div>
-        </div>
-        <div class="badge ${cmv<10?'green':cmv<15?'amber':'red'}">${fmt(cmv)}</div>
+  Object.entries(grupos).map(([nome,prods])=>{
+    const ordenados=ordenarTamanho(prods);
+    return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden;">
+      <div style="background:var(--bg3);padding:10px 14px;border-bottom:1px solid var(--border);">
+        <span style="font-weight:700;font-size:14px;">${nome}</span>
+        <span style="font-size:12px;color:var(--text3);margin-left:8px;">${ordenados.length} tamanho${ordenados.length>1?'s':''}</span>
+      </div>
+      ${ordenados.map(p=>{
+        const cmv=p.custo_por_unidade||0;
+        const tam=p.tamanho||p.quantidade_embalagem||null;
+        const tamLabel=tam?`<span style="background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">${tam}</span>`:`<span style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;">sem tamanho</span>`;
+        return`<div style="padding:12px 14px;border-bottom:1px solid var(--border);" id="prod-row-${p.id}">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                ${tamLabel}
+                <span style="font-size:12px;color:var(--text3);">CMV: <strong style="color:${cmv===0?'var(--red)':cmv<10?'var(--green)':cmv<15?'var(--amber)':'var(--red)'};">${cmv===0?'não definido':fmt(cmv)}</strong></span>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              ${cmv>0?`<button onclick="togglePrecos('${p.id}',${cmv},'${tam||''}')" style="background:var(--orange-bg);border:1px solid var(--orange-border);color:var(--orange);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;white-space:nowrap;">💰 Preços</button>`:''}
+              <button onclick="toggleEditProd('${p.id}')" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;">✏️</button>
+            </div>
+          </div>
+          <div id="prod-precos-${p.id}" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;">Preços sugeridos</span>
+              <div style="display:flex;gap:4px;" id="mg-btns-${p.id}">
+                <button onclick="renderPrecos('${p.id}',${cmv},20,'${tam||''}')" class="mg-btn" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2);">20%</button>
+                <button onclick="renderPrecos('${p.id}',${cmv},25,'${tam||''}')" class="mg-btn" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--orange);color:#fff;border:1.5px solid var(--orange);">25%</button>
+                <button onclick="renderPrecos('${p.id}',${cmv},30,'${tam||''}')" class="mg-btn" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2);">30%</button>
+              </div>
+            </div>
+            <div id="tabela-precos-${p.id}"></div>
+          </div>
+          <div id="prod-edit-${p.id}" style="display:none;margin-top:10px;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input id="tam-${p.id}" type="text" placeholder="Ex: 330ml" value="${tam||''}" style="width:90px;padding:7px 10px;font-size:13px;" />
+              <input id="cmv-${p.id}" type="text" placeholder="CMV (R$)" value="${cmv>0?cmv.toFixed(2).replace('.',','):''}" style="width:110px;padding:7px 10px;font-size:13px;" />
+              <button onclick="salvarProduto('${p.id}')" style="background:var(--orange);color:#fff;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;">Salvar</button>
+              <button onclick="toggleEditProd('${p.id}')" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;font-size:13px;">×</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+function toggleEditProd(id){
+  const el=document.getElementById(`prod-edit-${id}`);
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+
+function togglePrecos(id,cmv,tam){
+  const el=document.getElementById(`prod-precos-${id}`);
+  const aberto=el.style.display!=='none';
+  el.style.display=aberto?'none':'block';
+  if(!aberto) renderPrecos(id,cmv,25,tam);
+}
+
+function renderPrecos(id,cmv,margemAlvo,tam){
+  // Atualiza botões de margem
+  const btns=document.querySelectorAll(`#mg-btns-${id} button`);
+  btns.forEach(b=>{
+    const bm=parseInt(b.textContent);
+    b.style.background=bm===margemAlvo?'var(--orange)':'var(--bg3)';
+    b.style.color=bm===margemAlvo?'#fff':'var(--text2)';
+    b.style.borderColor=bm===margemAlvo?'var(--orange)':'var(--border2)';
+    b.setAttribute('onclick',`renderPrecos('${id}',${cmv},${bm},'${tam||''}')`);
+  });
+
+  const mg=margemAlvo/100;
+  const CF=5.34; // custo fixo por pedido
+
+  // Frete por tamanho: 330ml e 550ml = R$6, 770ml = R$7 (mais pesado, mais longe do custo médio)
+  const tamStr=(tam||'').toString().toLowerCase();
+  let freteBase=6.00;
+  if(tamStr.includes('770')) freteBase=7.00;
+  else if(tamStr.includes('550')) freteBase=6.50;
+
+  // Plataformas: {nome, taxa, frete, entrega}
+  const PLATS=[
+    {nome:'iFood Raízes',        taxa:0.152, frete:freteBase, entrega:'própria'},
+    {nome:'99Food Raízes',       taxa:0.032, frete:freteBase, entrega:'própria'},
+    {nome:'iFood Vem do Norte',  taxa:0.302, frete:0,         entrega:'plataforma'},
+    {nome:'99Food Vem do Norte', taxa:0.032, frete:freteBase, entrega:'própria'},
+  ];
+
+  // Badge do tamanho
+  const tamBadge=tamStr?`<span style="background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;">${tam}</span>`:'';
+
+  // Referência de CMVs pesados (do contexto real)
+  const CMV_REF={
+    '330ml':{'mix de frutas':6.02,'sonho de ninho':6.44,'brisa do norte':6.98,'três amores':8.35},
+    '550ml':{'avelinho':10.46},
+    '770ml':{'dois amores':14.96,'avelã crocante':14.00,'avelinho':14.49,'três amores':15.31},
+  };
+
+  const rows=PLATS.map(pl=>{
+    const custoTotal=cmv+CF+pl.frete;
+    const divisor=1-pl.taxa-mg;
+    const preco=divisor>0?custoTotal/divisor:0;
+    const precoArred=Math.ceil(preco/0.10)*0.10;
+    const lucroReal=precoArred*(1-pl.taxa)-cmv-CF-pl.frete;
+    const margemReal=precoArred>0?(lucroReal/precoArred)*100:0;
+    const ok=margemReal>=(margemAlvo-2);
+    const icone=margemReal>=margemAlvo?'✅':margemReal>=(margemAlvo-5)?'⚠️':'❌';
+
+    return`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${icone} ${pl.nome}</div>
+        <div style="font-size:11px;color:var(--text3);">taxa ${(pl.taxa*100).toFixed(1)}% · frete ${pl.frete>0?'R$'+pl.frete.toFixed(2).replace('.',','):'pela plataforma'}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:17px;font-weight:700;color:${ok?'var(--green)':'var(--amber)'};">R$${precoArred.toFixed(2).replace('.',',')}</div>
+        <div style="font-size:11px;color:var(--text3);">margem ${margemReal.toFixed(0)}%</div>
       </div>
     </div>`;
   }).join('');
+
+  const custoInfo=`<div style="margin-top:10px;font-size:11px;color:var(--text2);line-height:1.7;padding:9px 10px;background:var(--orange-bg);border-radius:8px;border:1px solid var(--orange-border);">
+    💡 <strong>Base do cálculo:</strong> CMV R$${cmv.toFixed(2).replace('.',',')} + fixo R$5,34/pedido${freteBase>0?' + frete R$'+freteBase.toFixed(2).replace('.',','):''}
+    &nbsp;·&nbsp; Fórmula: <em>(CMV + custos) ÷ (1 − taxa − margem)</em>
+  </div>`;
+
+  document.getElementById(`tabela-precos-${id}`).innerHTML=rows+custoInfo;
+}
+
+async function salvarProduto(id){
+  const tamEl=document.getElementById(`tam-${id}`);
+  const cmvEl=document.getElementById(`cmv-${id}`);
+  const tam=tamEl.value.trim();
+  const cmvRaw=cmvEl.value.replace(',','.');
+  const cmv=parseFloat(cmvRaw)||0;
+  const updates={};
+  if(tam)updates.quantidade_embalagem=tam;
+  updates.custo_por_unidade=cmv;
+  const{error}=await db.from('produtos').update(updates).eq('id',id);
+  if(error){showToast('Erro ao salvar: '+error.message,'red');}
+  else{showToast('Produto atualizado! ✅','green');carregarAdminProdutos();}
 }
 
 async function carregarAdminInsumos(){
