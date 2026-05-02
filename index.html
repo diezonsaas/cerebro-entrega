@@ -1497,8 +1497,8 @@ async function carregarAdminProdutos(){
   const TAMANHOS_ORDER=['330ml','550ml','770ml','330','550','770'];
   function ordenarTamanho(arr){
     return arr.sort((a,b)=>{
-      const ta=(a.tamanho||a.quantidade_embalagem||'').toString().toLowerCase();
-      const tb=(b.tamanho||b.quantidade_embalagem||'').toString().toLowerCase();
+      const ta=(a.tamanho_ml||'').toString().toLowerCase();
+      const tb=(b.tamanho_ml||'').toString().toLowerCase();
       const ia=TAMANHOS_ORDER.findIndex(t=>ta.includes(t));
       const ib=TAMANHOS_ORDER.findIndex(t=>tb.includes(t));
       return(ia===-1?99:ia)-(ib===-1?99:ib);
@@ -1513,18 +1513,18 @@ async function carregarAdminProdutos(){
   if(ordem==='nome')entradasGrupos.sort((a,b)=>a[0].localeCompare(b[0]));
   else if(ordem==='nome_desc')entradasGrupos.sort((a,b)=>b[0].localeCompare(a[0]));
   else if(ordem==='cmv_asc')entradasGrupos.sort((a,b)=>{
-    const ma=Math.min(...a[1].map(p=>p.custo_por_unidade||999));
-    const mb=Math.min(...b[1].map(p=>p.custo_por_unidade||999));
+    const ma=Math.min(...a[1].map(p=>p.cmv_medio||999));
+    const mb=Math.min(...b[1].map(p=>p.cmv_medio||999));
     return ma-mb;
   });
   else if(ordem==='cmv_desc')entradasGrupos.sort((a,b)=>{
-    const ma=Math.max(...a[1].map(p=>p.custo_por_unidade||0));
-    const mb=Math.max(...b[1].map(p=>p.custo_por_unidade||0));
+    const ma=Math.max(...a[1].map(p=>p.cmv_medio||0));
+    const mb=Math.max(...b[1].map(p=>p.cmv_medio||0));
     return mb-ma;
   });
   else if(ordem==='sem_cmv')entradasGrupos.sort((a,b)=>{
-    const temA=a[1].some(p=>p.custo_por_unidade>0)?1:0;
-    const temB=b[1].some(p=>p.custo_por_unidade>0)?1:0;
+    const temA=a[1].some(p=>p.cmv_medio>0)?1:0;
+    const temB=b[1].some(p=>p.cmv_medio>0)?1:0;
     return temA-temB;
   });
 
@@ -1546,8 +1546,8 @@ async function carregarAdminProdutos(){
         <span style="font-size:12px;color:var(--text3);margin-left:8px;">${ordenados.length} tamanho${ordenados.length>1?'s':''}</span>
       </div>
       ${ordenados.map(p=>{
-        const cmv=p.custo_por_unidade||0;
-        const tam=p.tamanho||p.quantidade_embalagem||null;
+        const cmv=p.cmv_medio||0;
+        const tam=p.tamanho_ml||null;
         const tamLabel=tam?`<span style="background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">${tam}</span>`:`<span style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;">sem tamanho</span>`;
         return`<div style="padding:12px 14px;border-bottom:1px solid var(--border);" id="prod-row-${p.id}">
           <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -1676,8 +1676,8 @@ async function salvarProduto(id){
   const cmv=parseFloat(cmvRaw)||0;
   if(cmv<=0&&!tam){mostrarToast('Informe o tamanho ou o CMV','red');return;}
   const updates={};
-  if(tam)updates.quantidade_embalagem=tam;
-  if(cmv>0)updates.custo_por_unidade=cmv;
+  if(tam)updates.tamanho_ml=tam;
+  if(cmv>0)updates.cmv_medio=cmv;
   console.log('Salvando produto',id,updates);
   const{error}=await db.from('produtos').update(updates).eq('id',id);
   console.log('Erro Supabase:',error);
@@ -1691,13 +1691,13 @@ async function carregarAdminInsumos(){
   const el=document.getElementById('admin-insumos');
   if(!data||!data.length){el.innerHTML='<div class="empty">Nenhum insumo cadastrado.</div>';return;}
   el.innerHTML=data.map(i=>{
-    const custo=i.custo_por_unidade||0;
+    const custo=i.cmv_medio||0;
     const precoEmb=i.preco_embalagem||0;
     return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:6px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div style="font-weight:600;">${i.nome}</div>
-          <div style="font-size:12px;color:var(--text3);">Unidade: ${i.unidade||'—'} · Emb: ${i.quantidade_embalagem||'—'}</div>
+          <div style="font-size:12px;color:var(--text3);">Unidade: ${i.unidade||'—'} · Emb: ${i.tamanho_ml||'—'}</div>
           <div style="font-size:12px;color:var(--text3);">Custo/unidade: ${fmt(custo)} · Embalagem: ${fmt(precoEmb)}</div>
         </div>
         <div style="font-weight:700;color:var(--orange);">${fmt(custo)}</div>
