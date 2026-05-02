@@ -1026,10 +1026,47 @@ async function salvarConta(){
   else{fecharModal('modal-conta');await carregarContas();await alertasContasDash();}
 }
 
+
+function mostrarToast(msg, tipo='green'){
+  const t=document.createElement('div');
+  t.style.cssText=`position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:${tipo==='green'?'var(--green)':'var(--red)'};color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,0.2);font-family:'Plus Jakarta Sans',sans-serif;`;
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
 async function marcarPago(id){
+  // Buscar dados da conta
+  const{data:conta}=await db.from('contas_pagar').select('*').eq('id',id).single();
+  if(!conta)return;
+
+  // Marcar como pago
   await db.from('contas_pagar').update({pago:true,pago_em:new Date().toISOString()}).eq('id',id);
+
+  // Criar lançamento automático no Caixa
+  const catMap={
+    'acai':'insumo_acai','insumos':'insumo_outros','embalagem':'embalagem',
+    'motoboy':'motoboy','gestao':'gestao','luz':'luz','internet':'internet',
+    'aluguel':'aluguel','sistema':'chip_maquininha','pessoal':'pessoal_outros','outros':'outros_saida'
+  };
+  const categoria=catMap[conta.categoria]||'outros_saida';
+  const hoje=new Date().toISOString().split('T')[0];
+
+  await db.from('caixa').insert({
+    tipo:'saida',
+    categoria,
+    descricao:conta.nome+(conta.observacao?' — '+conta.observacao:''),
+    valor:conta.valor,
+    data:hoje
+  });
+
   await carregarContas();
+  await carregarCaixa();
+  await carregarSaldoDash();
   await alertasContasDash();
+  
+  // Toast de confirmação
+  mostrarToast('✓ Conta paga e lançada no caixa!','green');
 }
 
 async function excluirConta(id){
