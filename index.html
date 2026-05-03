@@ -1378,58 +1378,144 @@ async function importarMultiplos(input){
 
 async function processarIFood(rows,id){
   const concluidos=rows.filter(r=>r['STATUS FINAL DO PEDIDO']==='CONCLUIDO');
-  const CMV=13;
+
+  // CMV dinâmico por faixa de preço (médias reais pesadas)
+  function cmvPorPreco(preco){
+    if(preco<=28)return 6.94;   // 330ml: média Mix Frutas/Sonho/Brisa/Três Amores
+    if(preco<=38)return 10.46;  // 550ml: Avelinho 550ml
+    return 14.43;                // 770ml: média dos 770ml pesados
+  }
+
+  // Motoboy real por distância
+  function motoPorDist(dist,prop){
+    if(!prop)return 0;
+    if(dist<=1)return 6.00;
+    if(dist<=2)return 7.00;
+    return 7.80;
+  }
+
   const pedidos=concluidos.map(r=>{
     const vi=parseFloat(String(r['VALOR DOS ITENS (R$)']).replace(',','.'))||0;
     const vl=parseFloat(String(r['VALOR LIQUIDO (R$)']).replace(',','.'))||0;
     const il=parseFloat(String(r['INCENTIVO PROMOCIONAL DA LOJA (R$)']).replace(',','.'))||0;
     const dist=parseFloat(String(r['DISTÂNCIA PERCORRIDA ATÉ O CLIENTE (KM)']).replace(',','.'))||1;
     const prop=(r['PRODUTO LOGISTICO']||'').includes('SELF_DELIVERY');
-    const moto=prop?(dist<=1?6:dist<=2?7:7.8):0;
-    const lucro=vl-CMV-moto-il;
+    const moto=motoPorDist(dist,prop);
+    const cmv=cmvPorPreco(vi);
+    const taxa=vi*0.152;
+    const lucro=vl-cmv-moto-il;
     const dh=r['DATA E HORA DO PEDIDO']||'';
     let ca;
-    try{const p=dh.toString().split(' ');const[d,m,a]=p[0].split('/');ca=`${a}-${m}-${d}T${p[1]||'12:00:00'}`;}
-    catch(e){ca=new Date().toISOString();}
+    try{
+      const p=dh.toString().split(' ');
+      const[d,m,a]=p[0].split('/');
+      ca=`${a}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T${p[1]||'12:00:00'}`;
+    }catch(e){ca=new Date().toISOString();}
     const ic=String(r['ID CURTO DO PEDIDO']||'').trim();
-    return{loja_id:id.loja_id,plataforma_id:id.plat_id,preco_venda:vi,custo_producao:CMV,custo_motoboy:moto,taxa_plataforma:vi*0.152,lucro,margem:vi>0?(lucro/vi)*100:0,distancia_km:Math.ceil(dist)||1,quantidade:1,status:lucro<0?'prejuizo':lucro<4?'risco':'saudavel',created_at:ca,pedido_ref:ic?'#'+ic:'',_il:il,_vl:vl};
+    return{
+      loja_id:id.loja_id,plataforma_id:id.plat_id,
+      preco_venda:vi,custo_producao:cmv,custo_motoboy:moto,
+      taxa_plataforma:taxa,lucro,
+      margem:vi>0?(lucro/vi)*100:0,
+      distancia_km:Math.ceil(dist)||1,
+      quantidade:1,
+      status:lucro<0?'prejuizo':lucro<4?'risco':'saudavel',
+      created_at:ca,
+      pedido_ref:ic?'#'+ic:'',
+      _il:il,_vl:vl
+    };
   });
+
   if(!pedidos.length)return{pedidos:0,inseridos:0,lucroTotal:0,incLojaTotal:0};
+
   const dmin=pedidos.map(p=>p.created_at).reduce((a,b)=>a<b?a:b);
   const dmax=pedidos.map(p=>p.created_at).reduce((a,b)=>a>b?a:b);
-  const{data:ex}=await db.from('pedidos').select('created_at,preco_venda').eq('loja_id',id.loja_id).eq('plataforma_id',id.plat_id).gte('created_at',dmin).lte('created_at',dmax);
+  const{data:ex}=await db.from('pedidos').select('pedido_ref,created_at,preco_venda')
+    .eq('loja_id',id.loja_id).eq('plataforma_id',id.plat_id)
+    .gte('created_at',dmin).lte('created_at',dmax);
+
+  const refs=new Set((ex||[]).map(p=>p.pedido_ref).filter(Boolean));
   const chaves=new Set((ex||[]).map(p=>p.created_at+'_'+p.preco_venda));
-  const novos=pedidos.filter(p=>!chaves.has(p.created_at+'_'+p.preco_venda));
+  const novos=pedidos.filter(p=>
+    p.pedido_ref?!refs.has(p.pedido_ref):!chaves.has(p.created_at+'_'+p.preco_venda)
+  );
+
   let ins=0;
-  for(let i=0;i<novos.length;i+=50){const lote=novos.slice(i,i+50).map(({_il,_vl,...r})=>r);const{error}=await db.from('pedidos').insert(lote);if(!error)ins+=Math.min(50,novos.length-i);}
+  for(let i=0;i<novos.length;i+=50){
+    const lote=novos.slice(i,i+50).map(({_il,_vl,...r})=>r);
+    const{error}=await db.from('pedidos').insert(lote);
+    if(error)console.error('Erro insert iFood',error.message);
+    else ins+=lote.length;
+  }
   return{pedidos:concluidos.length,inseridos:ins,lucroTotal:novos.reduce((s,p)=>s+p.lucro,0),incLojaTotal:novos.reduce((s,p)=>s+p._il,0)};
 }
 
 async function processar99Food(rows,id){
-  const CMV=13;const n=v=>parseFloat(String(v||0).replace(',','.'))||0;
+  const n=v=>parseFloat(String(v||0).replace(',','.'))||0;
+
+  // CMV dinâmico por faixa de preço
+  function cmvPorPreco(preco){
+    if(preco<=28)return 6.94;
+    if(preco<=38)return 10.46;
+    return 14.43;
+  }
+
+  // Motoboy 99Food: entrega própria usa distância padrão ~1.5km = R$7
+  function motoPorEntrega(met){
+    if(met.includes('própria')||met.includes('SELF'))return 7.00;
+    return 0;
+  }
+
   const pedidos=rows.map(r=>{
     const rec=n(r['Receita real da loja']);
     const desp=n(r['Despesas de ofertas da loja']);
     const frete=n(r['Custo líquido da loja na oferta de entrega grátis']);
     const met=r['Método de entrega']||'';
-    const prop=met.includes('própria')||met.includes('SELF');
-    const moto=prop?7:0;
-    const lucro=rec-CMV-moto-frete;
+    const moto=motoPorEntrega(met);
     const preco=n(r['Preço original do item']);
+    const cmv=cmvPorPreco(preco);
+    const lucro=rec-cmv-moto-frete;
     const dr=String(r['Data']||'');
     let ca=new Date().toISOString();
-    if(dr.length===8){const a=dr.slice(0,4),m=dr.slice(4,6),d=dr.slice(6,8);ca=`${a}-${m}-${d}T12:00:00`;}
+    if(dr.length===8){
+      const a=dr.slice(0,4),m=dr.slice(4,6),d=dr.slice(6,8);
+      ca=`${a}-${m}-${d}T12:00:00`;
+    }
     const id99=String(r['ID do pedido']||'').trim();
-    return{loja_id:id.loja_id,plataforma_id:id.plat_id,preco_venda:preco,custo_producao:CMV,custo_motoboy:moto,taxa_plataforma:preco*0.032,lucro,margem:preco>0?(lucro/preco)*100:0,distancia_km:1,quantidade:1,status:lucro<0?'prejuizo':lucro<4?'risco':'saudavel',created_at:ca,pedido_ref:id99?'#'+id99.slice(-6):'',_desp:desp,_frete:frete};
+    return{
+      loja_id:id.loja_id,plataforma_id:id.plat_id,
+      preco_venda:preco,custo_producao:cmv,custo_motoboy:moto,
+      taxa_plataforma:preco*0.032,lucro,
+      margem:preco>0?(lucro/preco)*100:0,
+      distancia_km:1,quantidade:1,
+      status:lucro<0?'prejuizo':lucro<4?'risco':'saudavel',
+      created_at:ca,
+      pedido_ref:id99?'#'+id99.slice(-6):'',
+      _desp:desp,_frete:frete
+    };
   });
+
   if(!pedidos.length)return{pedidos:0,inseridos:0,lucroTotal:0,incLojaTotal:0};
+
   const dmin=pedidos.map(p=>p.created_at).reduce((a,b)=>a<b?a:b);
   const dmax=pedidos.map(p=>p.created_at).reduce((a,b)=>a>b?a:b);
-  const{data:ex}=await db.from('pedidos').select('created_at,preco_venda').eq('loja_id',id.loja_id).eq('plataforma_id',id.plat_id).gte('created_at',dmin).lte('created_at',dmax);
+  const{data:ex}=await db.from('pedidos').select('pedido_ref,created_at,preco_venda')
+    .eq('loja_id',id.loja_id).eq('plataforma_id',id.plat_id)
+    .gte('created_at',dmin).lte('created_at',dmax);
+
+  const refs=new Set((ex||[]).map(p=>p.pedido_ref).filter(Boolean));
   const chaves=new Set((ex||[]).map(p=>p.created_at+'_'+p.preco_venda));
-  const novos=pedidos.filter(p=>!chaves.has(p.created_at+'_'+p.preco_venda));
+  const novos=pedidos.filter(p=>
+    p.pedido_ref?!refs.has(p.pedido_ref):!chaves.has(p.created_at+'_'+p.preco_venda)
+  );
+
   let ins=0;
-  for(let i=0;i<novos.length;i+=50){const lote=novos.slice(i,i+50).map(({_desp,_frete,...r})=>r);const{error}=await db.from('pedidos').insert(lote);if(!error)ins+=Math.min(50,novos.length-i);}
+  for(let i=0;i<novos.length;i+=50){
+    const lote=novos.slice(i,i+50).map(({_desp,_frete,...r})=>r);
+    const{error}=await db.from('pedidos').insert(lote);
+    if(error)console.error('Erro insert 99Food',error.message);
+    else ins+=lote.length;
+  }
   return{pedidos:rows.length,inseridos:ins,lucroTotal:novos.reduce((s,p)=>s+p.lucro,0),incLojaTotal:novos.reduce((s,p)=>s+p._desp,0)};
 }
 
