@@ -1373,7 +1373,25 @@ async function importarMultiplos(input){
     </div>`;
   }).join('')+(totalPed>0?`<div style="background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:var(--radius-sm);padding:12px 14px;"><div style="display:flex;justify-content:space-between;"><span style="font-weight:700;color:var(--orange);">Total consolidado</span><span style="font-weight:700;color:var(--green);">${fmt(totalLuc)}</span></div><div style="font-size:12px;color:var(--text3);margin-top:2px;">${totalPed} pedidos importados</div></div>`:'');
   input.value='';
-  if(modoAnaliseAtual==='pedidos')carregarAnalise();
+  // Após importar, ajusta o período automaticamente para cobrir as datas dos arquivos
+  if(modoAnaliseAtual==='pedidos'){
+    // Pega a data mais antiga dos pedidos importados para ajustar o filtro
+    const todasDatas=resultados.filter(r=>r.sucesso&&r.dataMin).map(r=>r.dataMin);
+    if(todasDatas.length){
+      const dataMin=todasDatas.reduce((a,b)=>a<b?a:b);
+      const hoje=new Date().toISOString().slice(0,10);
+      const diffDias=Math.ceil((new Date(hoje)-new Date(dataMin))/(1000*60*60*24))+1;
+      // Seleciona o chip de período correto
+      if(diffDias<=7)setPeriodoAnalise(7,null);
+      else if(diffDias<=14)setPeriodoAnalise(14,null);
+      else setPeriodoAnalise(30,null);
+      // Atualiza visual dos chips
+      document.querySelectorAll('#analise-pedidos .chip').forEach(b=>b.classList.remove('active'));
+      const alvo=diffDias<=7?'7 dias':diffDias<=14?'14 dias':'30 dias';
+      document.querySelectorAll('#analise-pedidos .chip').forEach(b=>{if(b.textContent===alvo)b.classList.add('active');});
+    }
+    carregarAnalise();
+  }
 }
 
 async function processarIFood(rows,id){
@@ -1411,7 +1429,7 @@ async function processarIFood(rows,id){
       const[d,m,a]=p[0].split('/');
       ca=`${a}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T${p[1]||'12:00:00'}`;
     }catch(e){ca=new Date().toISOString();}
-    const ic=String(r['ID CURTO DO PEDIDO']||'').trim();
+    const ic=String(r['ID COMPLETO DO PEDIDO']||r['ID CURTO DO PEDIDO']||'').trim();
     return{
       loja_id:id.loja_id,plataforma_id:id.plat_id,
       preco_venda:vi,custo_producao:cmv,custo_motoboy:moto,
@@ -1421,7 +1439,7 @@ async function processarIFood(rows,id){
       quantidade:1,
       status:lucro<0?'prejuizo':lucro<4?'risco':'saudavel',
       created_at:ca,
-      pedido_ref:ic?'#'+ic:'',
+      pedido_ref:ic?ic:'',
       _il:il,_vl:vl
     };
   });
@@ -1434,11 +1452,9 @@ async function processarIFood(rows,id){
     .eq('loja_id',id.loja_id).eq('plataforma_id',id.plat_id)
     .gte('created_at',dmin).lte('created_at',dmax);
 
-  const refs=new Set((ex||[]).map(p=>p.pedido_ref).filter(Boolean));
-  const chaves=new Set((ex||[]).map(p=>p.created_at+'_'+p.preco_venda));
-  const novos=pedidos.filter(p=>
-    p.pedido_ref?!refs.has(p.pedido_ref):!chaves.has(p.created_at+'_'+p.preco_venda)
-  );
+  // Anti-duplicata por ID completo do pedido (mais confiável)
+  const idsExistentes=new Set((ex||[]).map(p=>p.pedido_ref).filter(Boolean));
+  const novos=pedidos.filter(p=>!idsExistentes.has(p.pedido_ref));
 
   let ins=0;
   for(let i=0;i<novos.length;i+=50){
@@ -1447,7 +1463,8 @@ async function processarIFood(rows,id){
     if(error)console.error('Erro insert iFood',error.message);
     else ins+=lote.length;
   }
-  return{pedidos:concluidos.length,inseridos:ins,lucroTotal:novos.reduce((s,p)=>s+p.lucro,0),incLojaTotal:novos.reduce((s,p)=>s+p._il,0)};
+  const dataMin=pedidos.map(p=>p.created_at).reduce((a,b)=>a<b?a:b,'');
+  return{pedidos:concluidos.length,inseridos:ins,lucroTotal:novos.reduce((s,p)=>s+p.lucro,0),incLojaTotal:novos.reduce((s,p)=>s+p._il,0),dataMin};
 }
 
 async function processar99Food(rows,id){
@@ -1503,11 +1520,8 @@ async function processar99Food(rows,id){
     .eq('loja_id',id.loja_id).eq('plataforma_id',id.plat_id)
     .gte('created_at',dmin).lte('created_at',dmax);
 
-  const refs=new Set((ex||[]).map(p=>p.pedido_ref).filter(Boolean));
-  const chaves=new Set((ex||[]).map(p=>p.created_at+'_'+p.preco_venda));
-  const novos=pedidos.filter(p=>
-    p.pedido_ref?!refs.has(p.pedido_ref):!chaves.has(p.created_at+'_'+p.preco_venda)
-  );
+  const idsExistentes=new Set((ex||[]).map(p=>p.pedido_ref).filter(Boolean));
+  const novos=pedidos.filter(p=>!idsExistentes.has(p.pedido_ref));
 
   let ins=0;
   for(let i=0;i<novos.length;i+=50){
@@ -1516,7 +1530,8 @@ async function processar99Food(rows,id){
     if(error)console.error('Erro insert 99Food',error.message);
     else ins+=lote.length;
   }
-  return{pedidos:rows.length,inseridos:ins,lucroTotal:novos.reduce((s,p)=>s+p.lucro,0),incLojaTotal:novos.reduce((s,p)=>s+p._desp,0)};
+  const dataMin=pedidos.map(p=>p.created_at).reduce((a,b)=>a<b?a:b,'');
+  return{pedidos:rows.length,inseridos:ins,lucroTotal:novos.reduce((s,p)=>s+p.lucro,0),incLojaTotal:novos.reduce((s,p)=>s+p._desp,0),dataMin};
 }
 
 function processarIFoodResumo(rows,id){
