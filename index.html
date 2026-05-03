@@ -1483,7 +1483,9 @@ async function processar99Food(rows,id){
     return 0;
   }
 
-  const pedidos=rows.map(r=>{
+  // Filtra só pedidos concluídos (Receita real > 0)
+  const concluidos99=rows.filter(r=>n(r['Receita real da loja'])>0);
+  const pedidos=concluidos99.map(r=>{
     const rec=n(r['Receita real da loja']);
     const desp=n(r['Despesas de ofertas da loja']);
     const frete=n(r['Custo líquido da loja na oferta de entrega grátis']);
@@ -1491,10 +1493,15 @@ async function processar99Food(rows,id){
     const moto=motoPorEntrega(met);
     const preco=n(r['Preço original do item']);
     const cmv=cmvPorPreco(preco);
-    const lucro=rec-cmv-moto-frete;
+    // Lucro real: receita que entrou no caixa menos custos
+    const lucro=rec-cmv-moto-desp;
+    // Data: usa Horário do pedido se disponível, senão Data
+    const hp=String(r['Horário do pedido']||'');
     const dr=String(r['Data']||'');
     let ca=new Date().toISOString();
-    if(dr.length===8){
+    if(hp&&hp.length>=10){
+      ca=hp.replace(' ','T');
+    }else if(dr.length===8){
       const a=dr.slice(0,4),m=dr.slice(4,6),d=dr.slice(6,8);
       ca=`${a}-${m}-${d}T12:00:00`;
     }
@@ -1507,7 +1514,7 @@ async function processar99Food(rows,id){
       distancia_km:1,quantidade:1,
       status:lucro<0?'prejuizo':lucro<4?'risco':'saudavel',
       created_at:ca,
-      pedido_ref:id99?'#'+id99.slice(-6):'',
+      pedido_ref:id99,
       _desp:desp,_frete:frete
     };
   });
@@ -1531,7 +1538,7 @@ async function processar99Food(rows,id){
     else ins+=lote.length;
   }
   const dataMin=pedidos.map(p=>p.created_at).reduce((a,b)=>a<b?a:b,'');
-  return{pedidos:rows.length,inseridos:ins,lucroTotal:novos.reduce((s,p)=>s+p.lucro,0),incLojaTotal:novos.reduce((s,p)=>s+p._desp,0),dataMin};
+  return{pedidos:concluidos99.length,inseridos:ins,lucroTotal:novos.reduce((s,p)=>s+p.lucro,0),incLojaTotal:novos.reduce((s,p)=>s+p._desp,0),dataMin};
 }
 
 function processarIFoodResumo(rows,id){
