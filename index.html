@@ -1068,6 +1068,13 @@ async function carregarContas(){
     const{data:todas}=await db.from('contas_pagar').select('*').order('vencimento');
     const contas=todas||[];
 
+    // Ordena: vencidas primeiro → a vencer por data → pagas por último
+    contas.sort((a,b)=>{
+      if(a.pago&&!b.pago)return 1;
+      if(!a.pago&&b.pago)return -1;
+      return a.vencimento>b.vencimento?1:-1;
+    });
+
     // Métricas
     const aVencer=contas.filter(c=>!c.pago).reduce((s,c)=>s+c.valor,0);
     const pagas=contas.filter(c=>c.pago&&c.vencimento>=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().split('T')[0]).reduce((s,c)=>s+c.valor,0);
