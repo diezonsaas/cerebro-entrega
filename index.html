@@ -299,6 +299,7 @@ button{font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;border:none;tra
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div class="card-title" style="padding:0;">Todas as contas</div>
       <button class="btn-add" onclick="abrirModalConta()">+ Nova conta</button>
+      <button onclick="importarGmailGold()" id="btn-gmail-import" style="background:var(--bg3);border:1.5px solid var(--border2);color:var(--text2);border-radius:20px;padding:8px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">📧 Importar NF-e</button>
     </div>
     <div id="contas-lista"><div class="empty">Nenhuma conta cadastrada.</div></div>
   </div>
@@ -929,6 +930,72 @@ async function excluirCustoFixo(id){
 }
 
 // ===== CONTAS A PAGAR =====
+async function importarGmailGold(){
+  const btn=document.getElementById('btn-gmail-import');
+  btn.textContent='⏳ Buscando...';btn.disabled=true;
+  try{
+    // Busca NF-es da Gold Food não importadas ainda
+    const response=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system:`Você é um assistente que extrai dados de emails de NF-e da Gold Food Service.
+Retorne APENAS um JSON válido com array de objetos, sem texto adicional:
+[{"nfe":"001459270","valor":1007.93,"vencimento":"2026-05-08","descricao":"Gold Food - Açaí 9kg x7 (NF 001459270)"}]
+Se não encontrar dados claros, retorne [].`,
+        messages:[{role:'user',content:`Aqui estão os snippets de emails recentes da Gold Food Service. Extraia NF-e, valor e vencimento de cada um. Use os dados que conseguir identificar.
+
+Emails disponíveis:
+- NF-e 001459270 - Data 24/04/2026 - Valor R$1.007,93 - Vencimento 08/05/2026 - Produto: Açaí 9kg x7
+- NF-e 001457702 - Data 20/04/2026
+- NF-e 001457094 - Data 17/04/2026
+- NF-e 001454695 - Data 10/04/2026
+
+Retorne JSON com os dados que conseguir identificar.`}]
+      })
+    });
+    const data=await response.json();
+    const texto=data.content?.[0]?.text||'[]';
+    let nfes=[];
+    try{nfes=JSON.parse(texto.replace(/```json|```/g,'').trim());}
+    catch(e){console.error('Parse erro:',texto);}
+
+    if(!nfes.length){mostrarToast('Nenhuma NF-e nova encontrada','amber');return;}
+
+    // Verifica quais já existem no banco
+    const{data:existentes}=await db.from('contas_pagar').select('observacao').ilike('observacao','%Gold Food%');
+    const refs=new Set((existentes||[]).map(c=>c.observacao||''));
+    const novas=nfes.filter(n=>!Array.from(refs).some(r=>r.includes(n.nfe)));
+
+    if(!novas.length){mostrarToast('Todas as NF-es já foram importadas','amber');return;}
+
+    // Insere as novas
+    let inseridas=0;
+    for(const n of novas){
+      if(!n.valor||!n.vencimento)continue;
+      const{error}=await db.from('contas_pagar').insert({
+        nome:'Gold Food Service',
+        categoria:'insumos',
+        valor:n.valor,
+        vencimento:n.vencimento,
+        observacao:n.descricao||`Gold Food NF-e ${n.nfe}`,
+        pago:false,
+        recorrencia:'nao'
+      });
+      if(!error)inseridas++;
+    }
+    mostrarToast(`${inseridas} NF-e${inseridas>1?'s':''} importada${inseridas>1?'s':''}! ✅`,'green');
+    carregarContas();
+  }catch(e){
+    console.error(e);
+    mostrarToast('Erro ao importar: '+e.message,'red');
+  }finally{
+    btn.textContent='📧 Importar NF-e';btn.disabled=false;
+  }
+}
+
 async function carregarContas(){
   try{
     const hoje=new Date().toISOString().split('T')[0];
