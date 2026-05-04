@@ -299,7 +299,6 @@ button{font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;border:none;tra
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div class="card-title" style="padding:0;">Todas as contas</div>
       <button class="btn-add" onclick="abrirModalConta()">+ Nova conta</button>
-      <button onclick="importarGmailGold()" id="btn-gmail-import" style="background:var(--bg3);border:1.5px solid var(--border2);color:var(--text2);border-radius:20px;padding:8px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">📧 Importar NF-e</button>
     </div>
     <div id="contas-lista"><div class="empty">Nenhuma conta cadastrada.</div></div>
   </div>
@@ -509,6 +508,16 @@ button{font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;border:none;tra
       <span id="modal-conta-titulo">Nova conta</span>
       <button class="modal-close" onclick="fecharModal('modal-conta')">×</button>
     </div>
+
+    <!-- Upload PDF boleto -->
+    <div id="pdf-upload-area" style="border:2px dashed var(--border2);border-radius:10px;padding:14px;text-align:center;margin-bottom:16px;cursor:pointer;background:var(--bg3);" onclick="document.getElementById('pdf-boleto-input').click()">
+      <div style="font-size:20px;margin-bottom:4px;">📎</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text2);">Upload do boleto PDF</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px;">Clica aqui ou arrasta o arquivo</div>
+      <input type="file" id="pdf-boleto-input" accept=".pdf" style="display:none;" onchange="lerPdfBoleto(this)">
+    </div>
+    <div id="pdf-status" style="display:none;margin-bottom:12px;font-size:12px;padding:8px 12px;border-radius:8px;background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border);">⏳ Lendo PDF...</div>
+
     <input type="hidden" id="conta-id">
     <div class="field"><label>Fornecedor / Descrição</label>
       <input type="text" id="conta-nome" placeholder="Ex: Açaí — Fornecedor Martins">
@@ -930,70 +939,69 @@ async function excluirCustoFixo(id){
 }
 
 // ===== CONTAS A PAGAR =====
-async function importarGmailGold(){
-  const btn=document.getElementById('btn-gmail-import');
-  btn.textContent='⏳ Buscando...';btn.disabled=true;
+async function lerPdfBoleto(input){
+  const file=input.files[0];
+  if(!file)return;
+  const status=document.getElementById('pdf-status');
+  status.style.display='block';
+  status.textContent='⏳ Lendo PDF...';
+
   try{
-    // Busca NF-es da Gold Food não importadas ainda
+    // Lê o PDF como base64
+    const base64=await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result.split(',')[1]);
+      r.onerror=()=>rej(new Error('Erro ao ler arquivo'));
+      r.readAsDataURL(file);
+    });
+
+    // Envia pro Claude extrair os dados
     const response=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        system:`Você é um assistente que extrai dados de emails de NF-e da Gold Food Service.
-Retorne APENAS um JSON válido com array de objetos, sem texto adicional:
-[{"nfe":"001459270","valor":1007.93,"vencimento":"2026-05-08","descricao":"Gold Food - Açaí 9kg x7 (NF 001459270)"}]
-Se não encontrar dados claros, retorne [].`,
-        messages:[{role:'user',content:`Aqui estão os snippets de emails recentes da Gold Food Service. Extraia NF-e, valor e vencimento de cada um. Use os dados que conseguir identificar.
-
-Emails disponíveis:
-- NF-e 001459270 - Data 24/04/2026 - Valor R$1.007,93 - Vencimento 08/05/2026 - Produto: Açaí 9kg x7
-- NF-e 001457702 - Data 20/04/2026
-- NF-e 001457094 - Data 17/04/2026
-- NF-e 001454695 - Data 10/04/2026
-
-Retorne JSON com os dados que conseguir identificar.`}]
+        max_tokens:500,
+        system:'Você extrai dados de boletos e NF-es brasileiros. Retorne APENAS JSON válido sem texto adicional: {"fornecedor":"nome do fornecedor","valor":0.00,"vencimento":"YYYY-MM-DD","descricao":"descrição curta do produto/serviço","categoria":"acai|insumos|embalagem|motoboy|outros"}',
+        messages:[{role:'user',content:[
+          {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},
+          {type:'text',text:'Extraia fornecedor, valor total, data de vencimento e descrição do produto deste boleto/NF-e.'}
+        ]}]
       })
     });
+
     const data=await response.json();
-    const texto=data.content?.[0]?.text||'[]';
-    let nfes=[];
-    try{nfes=JSON.parse(texto.replace(/```json|```/g,'').trim());}
-    catch(e){console.error('Parse erro:',texto);}
+    const texto=data.content?.[0]?.text||'{}';
+    let info={};
+    try{info=JSON.parse(texto.replace(/```json|```/g,'').trim());}
+    catch(e){throw new Error('Não consegui ler os dados do PDF');}
 
-    if(!nfes.length){mostrarToast('Nenhuma NF-e nova encontrada','amber');return;}
-
-    // Verifica quais já existem no banco
-    const{data:existentes}=await db.from('contas_pagar').select('observacao').ilike('observacao','%Gold Food%');
-    const refs=new Set((existentes||[]).map(c=>c.observacao||''));
-    const novas=nfes.filter(n=>!Array.from(refs).some(r=>r.includes(n.nfe)));
-
-    if(!novas.length){mostrarToast('Todas as NF-es já foram importadas','amber');return;}
-
-    // Insere as novas
-    let inseridas=0;
-    for(const n of novas){
-      if(!n.valor||!n.vencimento)continue;
-      const{error}=await db.from('contas_pagar').insert({
-        nome:'Gold Food Service',
-        categoria:'insumos',
-        valor:n.valor,
-        vencimento:n.vencimento,
-        observacao:n.descricao||`Gold Food NF-e ${n.nfe}`,
-        pago:false,
-        recorrencia:'nao'
-      });
-      if(!error)inseridas++;
+    // Preenche o formulário automaticamente
+    if(info.fornecedor)document.getElementById('conta-nome').value=info.fornecedor;
+    if(info.valor)document.getElementById('conta-valor').value=info.valor.toFixed(2).replace('.',',');
+    if(info.vencimento)document.getElementById('conta-vencimento').value=info.vencimento;
+    if(info.descricao)document.getElementById('conta-obs').value=info.descricao;
+    if(info.categoria){
+      const sel=document.getElementById('conta-categoria');
+      for(let o of sel.options){if(o.value===info.categoria){sel.value=info.categoria;break;}}
     }
-    mostrarToast(`${inseridas} NF-e${inseridas>1?'s':''} importada${inseridas>1?'s':''}! ✅`,'green');
-    carregarContas();
+
+    status.style.background='var(--green-bg)';
+    status.style.color='var(--green)';
+    status.style.borderColor='var(--green-border)';
+    status.textContent='✅ PDF lido! Confira os dados abaixo e salve.';
+
   }catch(e){
     console.error(e);
-    mostrarToast('Erro ao importar: '+e.message,'red');
-  }finally{
-    btn.textContent='📧 Importar NF-e';btn.disabled=false;
+    status.style.background='var(--red-bg)';
+    status.style.color='var(--red)';
+    status.style.borderColor='var(--red-border)';
+    status.textContent='❌ Erro ao ler PDF: '+e.message+' — preencha manualmente.';
   }
+}
+
+async function importarGmailGold(){
+  mostrarToast('Use o upload de PDF no botão + Nova conta','amber');
 }
 
 async function carregarContas(){
