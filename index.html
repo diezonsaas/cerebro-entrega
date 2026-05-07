@@ -1906,7 +1906,10 @@ async function toggleFicha(id){
 
 async function carregarFicha(id){
   const lista=document.getElementById(`ficha-lista-${id}`);
-  const{data:itens,error}=await db.from('fichas_tecnicas').select('*').eq('produto_id',id).order('created_at');
+  const{data:itens,error}=await db.from('fichas_tecnicas')
+    .select('*, insumos(nome, unidade, custo_por_unidade)')
+    .eq('produto_id',id)
+    .order('created_at');
   
   if(error){lista.innerHTML=`<div style="color:var(--red);font-size:12px;">Erro: ${error.message}</div>`;return;}
   
@@ -1915,7 +1918,35 @@ async function carregarFicha(id){
     return;
   }
 
-  const total=itens.reduce((s,i)=>s+i.custo,0);
+  // Calcula custo de cada item baseado no insumo + quantidade
+  const itensComCusto = itens.map(i=>{
+    const ins = i.insumos || {};
+    const qtd = parseFloat(i.quantidade_gramas) || 0;
+    const preco = parseFloat(ins.custo_por_unidade) || 0;
+    const un = ins.unidade || 'g';
+    let custo = 0;
+    let qtdLabel = '';
+    
+    if(un === 'kg'){
+      custo = (qtd/1000) * preco;
+      qtdLabel = qtd + 'g';
+    } else if(un === 'g'){
+      custo = qtd * preco;
+      qtdLabel = qtd + 'g';
+    } else {
+      custo = qtd * preco;
+      qtdLabel = qtd + 'un';
+    }
+    
+    return {
+      id: i.id,
+      nome: ins.nome || 'Sem nome',
+      qtdLabel,
+      custo
+    };
+  });
+
+  const total=itensComCusto.reduce((s,i)=>s+i.custo,0);
   lista.innerHTML=`
     <table style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead>
@@ -1927,10 +1958,10 @@ async function carregarFicha(id){
         </tr>
       </thead>
       <tbody>
-        ${itens.map(i=>`
+        ${itensComCusto.map(i=>`
         <tr style="border-bottom:1px solid var(--border);">
-          <td style="padding:6px 0;color:var(--text);">${i.insumo_nome}</td>
-          <td style="text-align:right;padding:6px 0;color:var(--text2);">${i.quantidade}${i.unidade}</td>
+          <td style="padding:6px 0;color:var(--text);">${i.nome}</td>
+          <td style="text-align:right;padding:6px 0;color:var(--text2);">${i.qtdLabel}</td>
           <td style="text-align:right;padding:6px 0;color:var(--text);font-weight:600;">${fmt(i.custo)}</td>
           <td style="text-align:right;padding:6px 2px;">
             <button onclick="deletarIngrediente('${i.id}','${id}')" style="background:none;border:none;color:var(--red);font-size:14px;cursor:pointer;padding:0;">×</button>
@@ -1949,26 +1980,33 @@ async function carregarFicha(id){
     </table>`;
 }
 
-function abrirAddIngrediente(id){
+async function abrirAddIngrediente(id){
   const form=document.getElementById(`ficha-form-${id}`);
   form.style.display=form.style.display==='none'?'block':'none';
-  // Popula select de insumos
   const sel=document.getElementById(`fi-insumo-${id}`);
+  
   if(sel.options.length<=1){
-    INSUMOS_BASE.forEach(ins=>{
-      const op=document.createElement('option');
-      op.value=ins.nome;
-      op.textContent=`${ins.nome} (R$${(ins.preco_un*1000).toFixed(2)}/kg ou R$${ins.preco_un.toFixed(4)}/un)`;
-      op.dataset.preco=ins.preco_un;
-      op.dataset.un=ins.un;
-      sel.appendChild(op);
-    });
+    // Busca insumos do banco
+    const{data:insumos}=await db.from('insumos').select('id, nome, unidade, custo_por_unidade').order('nome');
+    if(insumos){
+      insumos.forEach(ins=>{
+        const op=document.createElement('option');
+        op.value=ins.id;
+        const precoLabel = ins.unidade==='kg'?`R$${ins.custo_por_unidade.toFixed(2)}/kg`:
+                          ins.unidade==='g'?`R$${(ins.custo_por_unidade*1000).toFixed(2)}/kg`:
+                          `R$${ins.custo_por_unidade.toFixed(4)}/un`;
+        op.textContent=`${ins.nome} (${precoLabel})`;
+        op.dataset.un=ins.unidade;
+        sel.appendChild(op);
+      });
+    }
   }
-  // Auto-seleciona unidade ao mudar insumo
+  
   sel.onchange=()=>{
     const op=sel.options[sel.selectedIndex];
     if(op&&op.dataset.un){
-      document.getElementById(`fi-un-${id}`).value=op.dataset.un;
+      const unEl=document.getElementById(`fi-un-${id}`);
+      unEl.value = op.dataset.un === 'unidade' ? 'un' : 'g';
     }
   };
 }
@@ -1976,25 +2014,17 @@ function abrirAddIngrediente(id){
 async function salvarIngrediente(id){
   const sel=document.getElementById(`fi-insumo-${id}`);
   const qtdEl=document.getElementById(`fi-qtd-${id}`);
-  const unEl=document.getElementById(`fi-un-${id}`);
   
-  const nomeInsumo=sel.value;
+  const insumoId=sel.value;
   const qtd=parseFloat(qtdEl.value)||0;
-  const un=unEl.value;
   
-  if(!nomeInsumo||!qtd){mostrarToast('Preencha o insumo e a quantidade','red');return;}
-  
-  // Calcula custo
-  const op=sel.options[sel.selectedIndex];
-  const precoUn=parseFloat(op.dataset.preco)||0;
-  const custo=precoUn*qtd;
+  if(!insumoId||!qtd){mostrarToast('Selecione o insumo e informe a quantidade','red');return;}
   
   const{error}=await db.from('fichas_tecnicas').insert({
     produto_id:id,
-    insumo_nome:nomeInsumo,
-    quantidade:qtd,
-    unidade:un,
-    custo:parseFloat(custo.toFixed(4))
+    insumo_id:insumoId,
+    quantidade_gramas:qtd,
+    eh_real:true
   });
   
   if(error){mostrarToast('Erro: '+error.message,'red');return;}
@@ -2158,4 +2188,3 @@ init();
 </script>
 </body>
 </html>
-
