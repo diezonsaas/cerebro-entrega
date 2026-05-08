@@ -659,6 +659,8 @@ function getCatLabel(tipo,cat){
 }
 
 // ===== INIT =====
+let pedidosHoje=[];
+
 async function init(){
   const d=new Date();
   document.getElementById('data-hoje').textContent=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
@@ -681,6 +683,7 @@ async function carregarSaldoDash(){
     el.textContent=fmt(saldo);
     el.style.color=saldo<0?'#f87171':saldo<100?'#fbbf24':'#F97316';
   }
+  // Atualizar também o saldo do caixa
   const cs=document.getElementById('caixa-saldo');
   if(cs){cs.textContent=fmt(saldo);cs.style.color=saldo<0?'var(--red)':saldo<100?'var(--amber)':'var(--green)';}
 }
@@ -701,6 +704,7 @@ async function carregarLancamentosDash(){
 function renderMetaDia(){
   const dia=new Date().getDay();
   const config=DIAS_CONFIG[dia];
+  const pct=0;
   document.getElementById('meta-label').textContent='Meta: '+config.meta+' pedidos';
   document.getElementById('meta-badge').textContent='0/'+config.meta;
   document.getElementById('meta-barra').style.width='0%';
@@ -755,6 +759,7 @@ async function carregarCaixa(){
   const{data}=await db.from('caixa').select('*').gte('data',inicio).order('created_at',{ascending:false});
   const lancamentos=data||[];
 
+  // Saldo SEMPRE total — independente do filtro
   const{data:todos}=await db.from('caixa').select('tipo,valor');
   const saldoTotal=(todos||[]).reduce((s,l)=>l.tipo==='entrada'?s+l.valor:s-l.valor,0);
   const saldoEl=document.getElementById('caixa-saldo');
@@ -765,6 +770,7 @@ async function carregarCaixa(){
   const sub=document.getElementById('caixa-saldo-sub');
   if(sub)sub.textContent='Saldo total · histórico: '+(caixaPeriodo==='hoje'?'hoje':caixaPeriodo==='semana'?'7 dias':'60 dias');
 
+  // DRE
   const entradas=lancamentos.filter(l=>l.tipo==='entrada');
   const saidas=lancamentos.filter(l=>l.tipo==='saida');
   const totalEntrada=entradas.reduce((s,l)=>s+l.valor,0);
@@ -784,6 +790,7 @@ async function carregarCaixa(){
   const mt=document.getElementById('dre-margem-txt');
   if(mt)mt.textContent=totalEntrada>0?'Margem líquida: '+margemLiq.toFixed(1)+'%':'';
 
+  // Por categoria — separando loja vs pessoal
   const porCat={};
   lancamentos.forEach(l=>{
     const key=l.tipo+'_'+l.categoria;
@@ -808,6 +815,7 @@ async function carregarCaixa(){
     }
   }
 
+  // Histórico com botão excluir
   const histEl=document.getElementById('caixa-historico');
   if(histEl){
     if(!lancamentos.length){histEl.innerHTML='<div class="empty">Nenhum lançamento no período.</div>';}
@@ -943,6 +951,7 @@ async function lerPdfBoleto(input){
   status.textContent='⏳ Lendo PDF...';
 
   try{
+    // Lê PDF com PDF.js
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const arrayBuffer=await file.arrayBuffer();
     const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
@@ -953,7 +962,9 @@ async function lerPdfBoleto(input){
       texto+=content.items.map(item=>item.str).join(' ')+'\n';
     }
 
+    // Extrai valor — busca padrões R$ ou valor da nota
     let valor=0;
+    // Tenta pegar "VALOR DA NOTA" ou "Valor:" ou último R$ grande
     const matchesValor=[
       /VALOR DA NOTA[\s:]*R?\$?\s*([\d.,]+)/i,
       /Valor[\s:]*R?\$?\s*([\d.,]+)/i,
@@ -964,12 +975,14 @@ async function lerPdfBoleto(input){
       const m=texto.match(re);
       if(m){valor=parseFloat(m[1].replace(/\./g,'').replace(',','.'))||0;if(valor>10)break;}
     }
+    // Se não achou, pega todos os valores R$ e usa o maior
     if(!valor||valor<10){
       const todos=[...texto.matchAll(/R\$\s*([\d]{1,3}(?:[.,]\d{3})*[.,]\d{2})/g)];
       const vals=todos.map(m=>parseFloat(m[1].replace(/\./g,'').replace(',','.'))).filter(v=>v>10);
       if(vals.length)valor=Math.max(...vals);
     }
 
+    // Extrai vencimento
     let vencimento='';
     const matchVenc=[
       /Vtco\.?\s*[\d\/]+.*?([\d]{2}\/[\d]{2}\/[\d]{4})/,
@@ -981,11 +994,13 @@ async function lerPdfBoleto(input){
       if(m){const[d,mo,a]=m[1].split('/');vencimento=`${a}-${mo}-${d}`;break;}
     }
     if(!vencimento){
+      // Pega todas as datas e usa a maior (mais futura = vencimento)
       const datas=[...texto.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
       const validas=datas.map(m=>`${m[3]}-${m[2]}-${m[1]}`).filter(d=>d>'2024-01-01').sort();
       if(validas.length)vencimento=validas[validas.length-1];
     }
 
+    // Extrai fornecedor
     let fornecedor='';
     const matchForn=[
       /RAZÃO SOCIAL[\s\n]*([\w\s]+LTDA|[\w\s]+SA|[\w\s]+ME|[\w\s]+EIRELI)/i,
@@ -997,20 +1012,24 @@ async function lerPdfBoleto(input){
       if(m){fornecedor=m[1].trim().slice(0,50);break;}
     }
     if(!fornecedor){
+      // Tenta pegar nome que aparece no início
       const linhas=texto.split('\n').map(l=>l.trim()).filter(l=>l.length>5);
       fornecedor=linhas.find(l=>/LTDA|SA\b|ME\b|EIRELI/i.test(l))||'';
       if(fornecedor)fornecedor=fornecedor.slice(0,50);
     }
 
+    // Detecta categoria pelo texto
     let categoria='outros';
     if(/açaí|acai|polpa/i.test(texto))categoria='acai';
     else if(/embalagem|copo|tampa|sacola/i.test(texto))categoria='embalagem';
     else if(/creme|insumo|fruta/i.test(texto))categoria='insumos';
 
+    // Preenche formulário
     if(fornecedor)document.getElementById('conta-nome').value=fornecedor;
     if(valor)document.getElementById('conta-valor').value=valor.toFixed(2).replace('.',',');
     if(vencimento)document.getElementById('conta-vencimento').value=vencimento;
 
+    // Descrição curta
     const qtd=texto.match(/(\d+(?:[.,]\d+)?)\s*(?:CX|KG|UN|caixa|kg)/i);
     const prod=texto.match(/(?:ACAI|AÇAÍ|CREME|EMBALAGEM)[^\n]{0,30}/i);
     if(qtd||prod)document.getElementById('conta-obs').value=((prod?prod[0].trim():'')+' '+(qtd?qtd[0].trim():'')).trim().slice(0,80);
@@ -1036,6 +1055,10 @@ async function lerPdfBoleto(input){
   }
 }
 
+async function importarGmailGold(){
+  mostrarToast('Use o upload de PDF no botão + Nova conta','amber');
+}
+
 async function carregarContas(){
   try{
     const hoje=new Date().toISOString().split('T')[0];
@@ -1045,18 +1068,21 @@ async function carregarContas(){
     const{data:todas}=await db.from('contas_pagar').select('*').order('vencimento');
     const contas=todas||[];
 
+    // Ordena: vencidas primeiro → a vencer por data → pagas por último
     contas.sort((a,b)=>{
       if(a.pago&&!b.pago)return 1;
       if(!a.pago&&b.pago)return -1;
       return a.vencimento>b.vencimento?1:-1;
     });
 
+    // Métricas
     const aVencer=contas.filter(c=>!c.pago).reduce((s,c)=>s+c.valor,0);
     const pagas=contas.filter(c=>c.pago&&c.vencimento>=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().split('T')[0]).reduce((s,c)=>s+c.valor,0);
     const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
     set('contas-total-vencer',fmt(aVencer));
     set('contas-total-pago',fmt(pagas));
 
+    // Kanban
     const kHoje=contas.filter(c=>!c.pago&&c.vencimento<=hoje);
     const kSemana=contas.filter(c=>!c.pago&&c.vencimento>hoje&&c.vencimento<=proxStr);
     const kPago=contas.filter(c=>c.pago).slice(0,5);
@@ -1077,6 +1103,7 @@ async function carregarContas(){
     set('k-semana-count',kSemana.length);
     set('k-pago-count',kPago.length);
 
+    // Lista completa
     const listaEl=document.getElementById('contas-lista');
     if(!contas.length){listaEl.innerHTML='<div class="empty">Nenhuma conta cadastrada.</div>';return;}
     listaEl.innerHTML=contas.map(c=>{
@@ -1136,18 +1163,24 @@ async function salvarConta(){
   else{fecharModal('modal-conta');await carregarContas();await alertasContasDash();}
 }
 
-function mostrarToast(msg,tipo='green'){
+
+function mostrarToast(msg, tipo='green'){
   const t=document.createElement('div');
-  t.style.cssText=`position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:${tipo==='green'?'var(--green)':tipo==='amber'?'var(--amber)':'var(--red)'};color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,0.2);font-family:'Plus Jakarta Sans',sans-serif;`;
+  t.style.cssText=`position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:${tipo==='green'?'var(--green)':'var(--red)'};color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,0.2);font-family:'Plus Jakarta Sans',sans-serif;`;
   t.textContent=msg;
   document.body.appendChild(t);
   setTimeout(()=>t.remove(),3000);
 }
 
 async function marcarPago(id){
+  // Buscar dados da conta
   const{data:conta}=await db.from('contas_pagar').select('*').eq('id',id).single();
   if(!conta)return;
+
+  // Marcar como pago
   await db.from('contas_pagar').update({pago:true,pago_em:new Date().toISOString()}).eq('id',id);
+
+  // Criar lançamento automático no Caixa
   const catMap={
     'acai':'insumo_acai','insumos':'insumo_outros','embalagem':'embalagem',
     'motoboy':'motoboy','gestao':'gestao','luz':'luz','internet':'internet',
@@ -1155,15 +1188,21 @@ async function marcarPago(id){
   };
   const categoria=catMap[conta.categoria]||'outros_saida';
   const hoje=new Date().toISOString().split('T')[0];
+
   await db.from('caixa').insert({
-    tipo:'saida',categoria,
+    tipo:'saida',
+    categoria,
     descricao:conta.nome+(conta.observacao?' — '+conta.observacao:''),
-    valor:conta.valor,data:hoje
+    valor:conta.valor,
+    data:hoje
   });
+
   await carregarContas();
   await carregarCaixa();
   await carregarSaldoDash();
   await alertasContasDash();
+  
+  // Toast de confirmação
   mostrarToast('✓ Conta paga e lançada no caixa!','green');
 }
 
@@ -1191,7 +1230,7 @@ function setModoAnalise(modo,btn){
 function setPeriodoAnalise(d,btn){
   analise_dias=d;analise_modo_custom=false;
   document.querySelectorAll('#analise-pedidos .chip').forEach(b=>b.classList.remove('active'));
-  if(btn)btn.classList.add('active');
+  btn.classList.add('active');
   const box=document.getElementById('custom-box');if(box)box.style.display='none';
   carregarAnalise();
 }
@@ -1229,7 +1268,9 @@ async function carregarAnalise(){
   }
 
   const{data:pedidos}=await db.from('pedidos').select('*').gte('created_at',inicioStr+'T00:00:00').lte('created_at',fimStr+'T23:59:59').order('created_at',{ascending:true});
+  const{data:lancamentos}=await db.from('caixa').select('*').gte('data',inicioStr).lte('data',fimStr);
   const ped=pedidos||[];
+  const lanc=lancamentos||[];
 
   const fatTotal=ped.reduce((s,p)=>s+p.preco_venda*p.quantidade,0);
   const lucroTotal=ped.reduce((s,p)=>s+p.lucro,0);
@@ -1246,6 +1287,7 @@ async function carregarAnalise(){
   set('db-pedidos',ped.length);
   set('db-ticket',fmt(ticket));
 
+  // Gráfico barras
   const porDia={};
   ped.forEach(p=>{
     const dia=p.created_at.split('T')[0];
@@ -1271,6 +1313,7 @@ async function carregarAnalise(){
     }).join('');
   }else{graEl.innerHTML='<div class="empty" style="width:100%;padding:12px 0;">Importe relatórios para ver o gráfico.</div>';}
 
+  // Por plataforma
   const platMap={
     [PLAT_IF_RAIZES]:{nome:'iFood Raízes',cor:'#E85C30'},
     [PLAT_99_RAIZES]:{nome:'99Food Raízes',cor:'#F5A623'},
@@ -1306,6 +1349,7 @@ async function carregarAnalise(){
     }).join('');
   }
 
+  // Pedidos no prejuízo
   const prej=ped.filter(p=>p.status==='prejuizo').slice(0,5);
   const prejEl=document.getElementById('analise-prej');
   if(prej.length){
@@ -1466,15 +1510,19 @@ async function importarMultiplos(input){
     </div>`;
   }).join('')+(totalPed>0?`<div style="background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:var(--radius-sm);padding:12px 14px;"><div style="display:flex;justify-content:space-between;"><span style="font-weight:700;color:var(--orange);">Total consolidado</span><span style="font-weight:700;color:var(--green);">${fmt(totalLuc)}</span></div><div style="font-size:12px;color:var(--text3);margin-top:2px;">${totalPed} pedidos importados</div></div>`:'');
   input.value='';
+  // Após importar, ajusta o período automaticamente para cobrir as datas dos arquivos
   if(modoAnaliseAtual==='pedidos'){
+    // Pega a data mais antiga dos pedidos importados para ajustar o filtro
     const todasDatas=resultados.filter(r=>r.sucesso&&r.dataMin).map(r=>r.dataMin);
     if(todasDatas.length){
       const dataMin=todasDatas.reduce((a,b)=>a<b?a:b);
       const hoje=new Date().toISOString().slice(0,10);
       const diffDias=Math.ceil((new Date(hoje)-new Date(dataMin))/(1000*60*60*24))+1;
+      // Seleciona o chip de período correto
       if(diffDias<=7)setPeriodoAnalise(7,null);
       else if(diffDias<=14)setPeriodoAnalise(14,null);
       else setPeriodoAnalise(30,null);
+      // Atualiza visual dos chips
       document.querySelectorAll('#analise-pedidos .chip').forEach(b=>b.classList.remove('active'));
       const alvo=diffDias<=7?'7 dias':diffDias<=14?'14 dias':'30 dias';
       document.querySelectorAll('#analise-pedidos .chip').forEach(b=>{if(b.textContent===alvo)b.classList.add('active');});
@@ -1485,17 +1533,22 @@ async function importarMultiplos(input){
 
 async function processarIFood(rows,id){
   const concluidos=rows.filter(r=>r['STATUS FINAL DO PEDIDO']==='CONCLUIDO');
+
+  // CMV dinâmico por faixa de preço (médias reais pesadas)
   function cmvPorPreco(preco){
-    if(preco<=28)return 6.94;
-    if(preco<=38)return 10.46;
-    return 14.43;
+    if(preco<=28)return 6.94;   // 330ml: média Mix Frutas/Sonho/Brisa/Três Amores
+    if(preco<=38)return 10.46;  // 550ml: Avelinho 550ml
+    return 14.43;                // 770ml: média dos 770ml pesados
   }
+
+  // Motoboy real por distância
   function motoPorDist(dist,prop){
     if(!prop)return 0;
     if(dist<=1)return 6.00;
     if(dist<=2)return 7.00;
     return 7.80;
   }
+
   const pedidos=concluidos.map(r=>{
     const vi=parseFloat(String(r['VALOR DOS ITENS (R$)']).replace(',','.'))||0;
     const vl=parseFloat(String(r['VALOR LIQUIDO (R$)']).replace(',','.'))||0;
@@ -1527,14 +1580,19 @@ async function processarIFood(rows,id){
       _il:il,_vl:vl
     };
   });
+
   if(!pedidos.length)return{pedidos:0,inseridos:0,lucroTotal:0,incLojaTotal:0};
+
   const dmin=pedidos.map(p=>p.created_at).reduce((a,b)=>a<b?a:b);
   const dmax=pedidos.map(p=>p.created_at).reduce((a,b)=>a>b?a:b);
   const{data:ex}=await db.from('pedidos').select('pedido_ref,created_at,preco_venda')
     .eq('loja_id',id.loja_id).eq('plataforma_id',id.plat_id)
     .gte('created_at',dmin).lte('created_at',dmax);
+
+  // Anti-duplicata por ID completo do pedido (mais confiável)
   const idsExistentes=new Set((ex||[]).map(p=>p.pedido_ref).filter(Boolean));
   const novos=pedidos.filter(p=>!idsExistentes.has(p.pedido_ref));
+
   let ins=0;
   for(let i=0;i<novos.length;i+=50){
     const lote=novos.slice(i,i+50).map(({_il,_vl,...r})=>r);
@@ -1548,15 +1606,21 @@ async function processarIFood(rows,id){
 
 async function processar99Food(rows,id){
   const n=v=>parseFloat(String(v||0).replace(',','.'))||0;
+
+  // CMV dinâmico por faixa de preço
   function cmvPorPreco(preco){
     if(preco<=28)return 6.94;
     if(preco<=38)return 10.46;
     return 14.43;
   }
+
+  // Motoboy 99Food: entrega própria usa distância padrão ~1.5km = R$7
   function motoPorEntrega(met){
     if(met.includes('própria')||met.includes('SELF'))return 7.00;
     return 0;
   }
+
+  // Filtra só pedidos concluídos (Receita real > 0)
   const concluidos99=rows.filter(r=>n(r['Receita real da loja'])>0);
   const pedidos=concluidos99.map(r=>{
     const rec=n(r['Receita real da loja']);
@@ -1566,12 +1630,18 @@ async function processar99Food(rows,id){
     const moto=motoPorEntrega(met);
     const preco=n(r['Preço original do item']);
     const cmv=cmvPorPreco(preco);
+    // Lucro real: receita que entrou no caixa menos custos
     const lucro=rec-cmv-moto-desp;
+    // Data: usa Horário do pedido se disponível, senão Data
     const hp=String(r['Horário do pedido']||'');
     const dr=String(r['Data']||'');
     let ca=new Date().toISOString();
-    if(hp&&hp.length>=10){ca=hp.replace(' ','T');}
-    else if(dr.length===8){const a=dr.slice(0,4),m=dr.slice(4,6),d=dr.slice(6,8);ca=`${a}-${m}-${d}T12:00:00`;}
+    if(hp&&hp.length>=10){
+      ca=hp.replace(' ','T');
+    }else if(dr.length===8){
+      const a=dr.slice(0,4),m=dr.slice(4,6),d=dr.slice(6,8);
+      ca=`${a}-${m}-${d}T12:00:00`;
+    }
     const id99=String(r['ID do pedido']||'').trim();
     return{
       loja_id:id.loja_id,plataforma_id:id.plat_id,
@@ -1585,14 +1655,18 @@ async function processar99Food(rows,id){
       _desp:desp,_frete:frete
     };
   });
+
   if(!pedidos.length)return{pedidos:0,inseridos:0,lucroTotal:0,incLojaTotal:0};
+
   const dmin=pedidos.map(p=>p.created_at).reduce((a,b)=>a<b?a:b);
   const dmax=pedidos.map(p=>p.created_at).reduce((a,b)=>a>b?a:b);
   const{data:ex}=await db.from('pedidos').select('pedido_ref,created_at,preco_venda')
     .eq('loja_id',id.loja_id).eq('plataforma_id',id.plat_id)
     .gte('created_at',dmin).lte('created_at',dmax);
+
   const idsExistentes=new Set((ex||[]).map(p=>p.pedido_ref).filter(Boolean));
   const novos=pedidos.filter(p=>!idsExistentes.has(p.pedido_ref));
+
   let ins=0;
   for(let i=0;i<novos.length;i+=50){
     const lote=novos.slice(i,i+50).map(({_desp,_frete,...r})=>r);
@@ -1657,6 +1731,7 @@ async function carregarAdminProdutos(){
   const el=document.getElementById('admin-produtos');
   if(!data||!data.length){el.innerHTML='<div class="empty">Nenhum produto cadastrado.</div>';return;}
 
+  // Agrupa por nome base
   const grupos={};
   data.forEach(p=>{
     const base=p.nome;
@@ -1675,6 +1750,7 @@ async function carregarAdminProdutos(){
     });
   }
 
+  // Ordenação dos grupos
   const ordemEl=document.getElementById('prod-ordem');
   const ordem=ordemEl?ordemEl.value:'nome';
 
@@ -1707,7 +1783,6 @@ async function carregarAdminProdutos(){
       <option value="sem_cmv" ${ordem==='sem_cmv'?'selected':''}>Sem CMV primeiro</option>
     </select>
   </div>`;
-
   el.innerHTML+=entradasGrupos.map(([nome,prods])=>{
     const ordenados=ordenarTamanho(prods);
     return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden;">
@@ -1733,20 +1808,17 @@ async function carregarAdminProdutos(){
               <button onclick="toggleEditProd('${p.id}')" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;">✏️</button>
             </div>
           </div>
-
-          <!-- PAINEL PREÇOS -->
           <div id="prod-precos-${p.id}" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
               <span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;">Preços sugeridos</span>
               <div style="display:flex;gap:4px;" id="mg-btns-${p.id}">
-                <button onclick="renderPrecos('${p.id}',${cmv},20,'${tam||''}')" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2);">20%</button>
-                <button onclick="renderPrecos('${p.id}',${cmv},25,'${tam||''}')" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--orange);color:#fff;border:1.5px solid var(--orange);">25%</button>
-                <button onclick="renderPrecos('${p.id}',${cmv},30,'${tam||''}')" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2);">30%</button>
+                <button onclick="renderPrecos('${p.id}',${cmv},20,'${tam||''}')" class="mg-btn" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2);">20%</button>
+                <button onclick="renderPrecos('${p.id}',${cmv},25,'${tam||''}')" class="mg-btn" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--orange);color:#fff;border:1.5px solid var(--orange);">25%</button>
+                <button onclick="renderPrecos('${p.id}',${cmv},30,'${tam||''}')" class="mg-btn" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2);">30%</button>
               </div>
             </div>
             <div id="tabela-precos-${p.id}"></div>
           </div>
-
           <!-- PAINEL FICHA TÉCNICA -->
           <div id="prod-ficha-${p.id}" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -1759,16 +1831,17 @@ async function carregarAdminProdutos(){
             <!-- Form add ingrediente -->
             <div id="ficha-form-${p.id}" style="display:none;margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;">
               <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">Adicionar ingrediente</div>
-              <input id="fi-nome-${p.id}" type="text" placeholder="Nome do ingrediente (ex: Açaí)" style="width:100%;padding:7px 10px;font-size:13px;margin-bottom:6px;" />
+              <select id="fi-insumo-${p.id}" style="width:100%;padding:7px 10px;font-size:13px;margin-bottom:6px;">
+                <option value="">Selecione o insumo...</option>
+              </select>
               <div style="display:flex;gap:6px;margin-bottom:6px;">
-                <input id="fi-qtd-${p.id}" type="number" placeholder="Quantidade" step="0.1" min="0" style="flex:1;padding:7px 10px;font-size:13px;" />
+                <input id="fi-qtd-${p.id}" type="number" placeholder="Quantidade" step="0.1" style="flex:1;padding:7px 10px;font-size:13px;" />
                 <select id="fi-un-${p.id}" style="width:80px;padding:7px 10px;font-size:13px;">
                   <option value="g">g</option>
                   <option value="ml">ml</option>
                   <option value="un">un</option>
                 </select>
               </div>
-              <input id="fi-custo-${p.id}" type="number" placeholder="Custo total deste item (R$)" step="0.01" min="0" style="width:100%;padding:7px 10px;font-size:13px;margin-bottom:8px;" />
               <div style="display:flex;gap:6px;">
                 <button onclick="salvarIngrediente('${p.id}')" style="flex:1;background:var(--orange);color:#fff;border-radius:8px;padding:7px;font-size:13px;font-weight:600;">Salvar</button>
                 <button onclick="document.getElementById('ficha-form-${p.id}').style.display='none'" style="background:var(--bg2);color:var(--text2);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;font-size:13px;">×</button>
@@ -1776,7 +1849,6 @@ async function carregarAdminProdutos(){
             </div>
           </div>
 
-          <!-- EDITAR PRODUTO -->
           <div id="prod-edit-${p.id}" style="display:none;margin-top:10px;">
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <input id="tam-${p.id}" type="text" placeholder="Ex: 330ml" value="${tam||''}" style="width:90px;padding:7px 10px;font-size:13px;" />
@@ -1792,8 +1864,38 @@ async function carregarAdminProdutos(){
 }
 
 // ===== FICHA TÉCNICA =====
-// A tabela fichas_tecnicas tem: id, produto_id, insumo_nome, quantidade, unidade, custo, created_at
-// NÃO tem FK para tabela insumos — os dados são strings diretos
+
+// Lista de insumos com preço por unidade
+const INSUMOS_BASE = [
+  {nome:'Açaí',un:'g',preco_kg:15.99,preco_un:0.01599},
+  {nome:'Copo 330ml',un:'un',preco_un:0.1198},
+  {nome:'Tampa 330ml',un:'un',preco_un:0.1500},
+  {nome:'Copo 550ml',un:'un',preco_un:0.2900},
+  {nome:'Tampa 550ml',un:'un',preco_un:0.1980},
+  {nome:'Copo 770ml',un:'un',preco_un:0.4980},
+  {nome:'Tampa 770ml',un:'un',preco_un:0.2580},
+  {nome:'Pote 1L c/tampa',un:'un',preco_un:1.2760},
+  {nome:'Lacre',un:'un',preco_un:0.0380},
+  {nome:'Colher',un:'un',preco_un:0.1336},
+  {nome:'Sacola 20x30',un:'un',preco_un:0.2870},
+  {nome:'Sacola 30x40',un:'un',preco_un:0.4352},
+  {nome:'Creme Ninho',un:'g',preco_un:0.03275},
+  {nome:'Creme Avelã',un:'g',preco_un:0.03248},
+  {nome:'Creme Morango',un:'g',preco_un:0.03450},
+  {nome:'Creme Cookies Cream',un:'g',preco_un:0.02550},
+  {nome:'Creme Pistache',un:'g',preco_un:0.05990},
+  {nome:'Banana',un:'g',preco_un:0.00499},
+  {nome:'Morango',un:'g',preco_un:0.03000},
+  {nome:'Uva',un:'g',preco_un:0.02998},
+  {nome:'Manga',un:'g',preco_un:0.00990},
+  {nome:'Ovomaltine',un:'g',preco_un:0.05133},
+  {nome:'Chocoball',un:'g',preco_un:0.03300},
+  {nome:'Paçoca',un:'un',preco_un:0.6700},
+  {nome:'Amendoim',un:'g',preco_un:0.01990},
+  {nome:'Confete',un:'g',preco_un:0.04298},
+  {nome:'Leite Condensado',un:'g',preco_un:0.01263},
+  {nome:'Leite em Pó',un:'g',preco_un:0.03500},
+];
 
 async function toggleFicha(id){
   const el=document.getElementById(`prod-ficha-${id}`);
@@ -1804,24 +1906,46 @@ async function toggleFicha(id){
 
 async function carregarFicha(id){
   const lista=document.getElementById(`ficha-lista-${id}`);
-  // Busca direto da tabela fichas_tecnicas sem JOIN
   const{data:itens,error}=await db.from('fichas_tecnicas')
-    .select('id, insumo_nome, quantidade, unidade, custo')
+    .select('id, quantidade_gramas, insumos(nome, unidade, custo_por_unidade)')
     .eq('produto_id',id)
     .order('created_at');
 
-  if(error){
-    lista.innerHTML=`<div style="color:var(--red);font-size:12px;">Erro: ${error.message}</div>`;
-    return;
-  }
+  if(error){lista.innerHTML=`<div style="color:var(--red);font-size:12px;">Erro: ${error.message}</div>`;return;}
 
   if(!itens||!itens.length){
     lista.innerHTML=`<div style="text-align:center;font-size:12px;color:var(--text3);padding:12px 0;">Nenhum ingrediente cadastrado.<br>Clique em + Ingrediente para começar.</div>`;
     return;
   }
 
-  const total=itens.reduce((s,i)=>s+(parseFloat(i.custo)||0),0);
+  // quantidade_gramas está sempre em gramas; custo_por_unidade é por kg ou por unidade
+  const itensComCusto = itens.map(i=>{
+    const ins = i.insumos || {};
+    const qtd = parseFloat(i.quantidade_gramas) || 0;
+    const preco = parseFloat(ins.custo_por_unidade) || 0;
+    const un = ins.unidade || 'kg';
+    let custo = 0;
+    let qtdLabel = qtd + 'g';
 
+    if(un === 'kg'){
+      custo = (qtd / 1000) * preco;
+    } else if(un === 'unidade' || un === 'un'){
+      custo = qtd * preco;
+      qtdLabel = qtd + 'un';
+    } else {
+      // fallback: trata como kg
+      custo = (qtd / 1000) * preco;
+    }
+
+    return {
+      id: i.id,
+      nome: ins.nome || 'Sem nome',
+      qtdLabel,
+      custo
+    };
+  });
+
+  const total=itensComCusto.reduce((s,i)=>s+i.custo,0);
   lista.innerHTML=`
     <table style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead>
@@ -1833,21 +1957,15 @@ async function carregarFicha(id){
         </tr>
       </thead>
       <tbody>
-        ${itens.map(i=>{
-          const qtd=parseFloat(i.quantidade)||0;
-          const un=i.unidade||'g';
-          const custo=parseFloat(i.custo)||0;
-          const nome=i.insumo_nome||'—';
-          const qtdLabel=un==='un'?`${qtd}un`:`${qtd}${un}`;
-          return`<tr style="border-bottom:1px solid var(--border);">
-            <td style="padding:6px 0;color:var(--text);">${nome}</td>
-            <td style="text-align:right;padding:6px 0;color:var(--text2);">${qtdLabel}</td>
-            <td style="text-align:right;padding:6px 0;color:var(--text);font-weight:600;">${fmt(custo)}</td>
-            <td style="text-align:right;padding:6px 2px;">
-              <button onclick="deletarIngrediente('${i.id}','${id}')" style="background:none;border:none;color:var(--red);font-size:14px;cursor:pointer;padding:0;">×</button>
-            </td>
-          </tr>`;
-        }).join('')}
+        ${itensComCusto.map(i=>`
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 0;color:var(--text);">${i.nome}</td>
+          <td style="text-align:right;padding:6px 0;color:var(--text2);">${i.qtdLabel}</td>
+          <td style="text-align:right;padding:6px 0;color:var(--text);font-weight:600;">${fmt(i.custo)}</td>
+          <td style="text-align:right;padding:6px 2px;">
+            <button onclick="deletarIngrediente('${i.id}','${id}')" style="background:none;border:none;color:var(--red);font-size:14px;cursor:pointer;padding:0;">×</button>
+          </td>
+        </tr>`).join('')}
       </tbody>
       <tfoot>
         <tr style="border-top:2px solid var(--border2);">
@@ -1861,42 +1979,57 @@ async function carregarFicha(id){
     </table>`;
 }
 
-function abrirAddIngrediente(id){
+async function abrirAddIngrediente(id){
   const form=document.getElementById(`ficha-form-${id}`);
   form.style.display=form.style.display==='none'?'block':'none';
-  // Limpa campos ao abrir
-  if(form.style.display==='block'){
-    document.getElementById(`fi-nome-${id}`).value='';
-    document.getElementById(`fi-qtd-${id}`).value='';
-    document.getElementById(`fi-custo-${id}`).value='';
+  const sel=document.getElementById(`fi-insumo-${id}`);
+  
+  if(sel.options.length<=1){
+    // Busca insumos do banco
+    const{data:insumos}=await db.from('insumos').select('id, nome, unidade, custo_por_unidade').order('nome');
+    if(insumos){
+      insumos.forEach(ins=>{
+        const op=document.createElement('option');
+        op.value=ins.id;
+        const precoLabel = ins.unidade==='kg'?`R$${ins.custo_por_unidade.toFixed(2)}/kg`:
+                          ins.unidade==='g'?`R$${(ins.custo_por_unidade*1000).toFixed(2)}/kg`:
+                          `R$${ins.custo_por_unidade.toFixed(4)}/un`;
+        op.textContent=`${ins.nome} (${precoLabel})`;
+        op.dataset.un=ins.unidade;
+        sel.appendChild(op);
+      });
+    }
   }
+  
+  sel.onchange=()=>{
+    const op=sel.options[sel.selectedIndex];
+    if(op&&op.dataset.un){
+      const unEl=document.getElementById(`fi-un-${id}`);
+      unEl.value = op.dataset.un === 'unidade' ? 'un' : 'g';
+    }
+  };
 }
 
 async function salvarIngrediente(id){
-  const nomeEl=document.getElementById(`fi-nome-${id}`);
+  const sel=document.getElementById(`fi-insumo-${id}`);
   const qtdEl=document.getElementById(`fi-qtd-${id}`);
-  const unEl=document.getElementById(`fi-un-${id}`);
-  const custoEl=document.getElementById(`fi-custo-${id}`);
-
-  const insumo_nome=nomeEl.value.trim();
-  const quantidade=parseFloat(qtdEl.value)||0;
-  const unidade=unEl.value;
-  const custo=parseFloat(custoEl.value)||0;
-
-  if(!insumo_nome){mostrarToast('Informe o nome do ingrediente','amber');return;}
-  if(!quantidade){mostrarToast('Informe a quantidade','amber');return;}
-  if(!custo&&custo!==0){mostrarToast('Informe o custo','amber');return;}
-
+  
+  const insumoId=sel.value;
+  const qtd=parseFloat(qtdEl.value)||0;
+  
+  if(!insumoId||!qtd){mostrarToast('Selecione o insumo e informe a quantidade','red');return;}
+  
   const{error}=await db.from('fichas_tecnicas').insert({
     produto_id:id,
-    insumo_nome,
-    quantidade,
-    unidade,
-    custo
+    insumo_id:insumoId,
+    quantidade_gramas:qtd,
+    eh_real:true
   });
-
+  
   if(error){mostrarToast('Erro: '+error.message,'red');return;}
   mostrarToast('Ingrediente adicionado! ✅','green');
+  qtdEl.value='';
+  sel.value='';
   document.getElementById(`ficha-form-${id}`).style.display='none';
   await carregarFicha(id);
 }
@@ -1927,6 +2060,7 @@ function togglePrecos(id,cmv,tam){
 }
 
 function renderPrecos(id,cmv,margemAlvo,tam){
+  // Atualiza botões de margem
   const btns=document.querySelectorAll(`#mg-btns-${id} button`);
   btns.forEach(b=>{
     const bm=parseInt(b.textContent);
@@ -1937,18 +2071,31 @@ function renderPrecos(id,cmv,margemAlvo,tam){
   });
 
   const mg=margemAlvo/100;
-  const CF=5.34;
+  const CF=5.34; // custo fixo por pedido
+
+  // Frete por tamanho: 330ml e 550ml = R$6, 770ml = R$7 (mais pesado, mais longe do custo médio)
   const tamStr=(tam||'').toString().toLowerCase();
   let freteBase=6.00;
   if(tamStr.includes('770')) freteBase=7.00;
   else if(tamStr.includes('550')) freteBase=6.50;
 
+  // Plataformas: {nome, taxa, frete, entrega}
   const PLATS=[
     {nome:'iFood Raízes',        taxa:0.152, frete:freteBase, entrega:'própria'},
     {nome:'99Food Raízes',       taxa:0.032, frete:freteBase, entrega:'própria'},
     {nome:'iFood Vem do Norte',  taxa:0.302, frete:0,         entrega:'plataforma'},
     {nome:'99Food Vem do Norte', taxa:0.032, frete:freteBase, entrega:'própria'},
   ];
+
+  // Badge do tamanho
+  const tamBadge=tamStr?`<span style="background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;">${tam}</span>`:'';
+
+  // Referência de CMVs pesados (do contexto real)
+  const CMV_REF={
+    '330ml':{'mix de frutas':6.02,'sonho de ninho':6.44,'brisa do norte':6.98,'três amores':8.35},
+    '550ml':{'avelinho':10.46},
+    '770ml':{'dois amores':14.96,'avelã crocante':14.00,'avelinho':14.49,'três amores':15.31},
+  };
 
   const rows=PLATS.map(pl=>{
     const custoTotal=cmv+CF+pl.frete;
@@ -1959,6 +2106,7 @@ function renderPrecos(id,cmv,margemAlvo,tam){
     const margemReal=precoArred>0?(lucroReal/precoArred)*100:0;
     const ok=margemReal>=(margemAlvo-2);
     const icone=margemReal>=margemAlvo?'✅':margemReal>=(margemAlvo-5)?'⚠️':'❌';
+
     return`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text);">${icone} ${pl.nome}</div>
@@ -1990,7 +2138,9 @@ async function salvarProduto(id){
   const updates={};
   if(tam)updates.tamanho_ml=tam;
   if(cmv>0)updates.cmv_medio=cmv;
+  console.log('Salvando produto',id,updates);
   const{error}=await db.from('produtos').update(updates).eq('id',id);
+  console.log('Erro Supabase:',error);
   if(error){mostrarToast('Erro Supabase: '+error.message,'red');return;}
   mostrarToast('Produto atualizado! ✅','green');
   carregarAdminProdutos();
@@ -1999,19 +2149,18 @@ async function salvarProduto(id){
 async function carregarAdminInsumos(){
   const{data}=await db.from('insumos').select('*').order('nome');
   const el=document.getElementById('admin-insumos');
-  if(!data||!data.length){
-    el.innerHTML='<div class="empty">Nenhum insumo cadastrado.</div>';
-    return;
-  }
+  if(!data||!data.length){el.innerHTML='<div class="empty">Nenhum insumo cadastrado.</div>';return;}
   el.innerHTML=data.map(i=>{
-    const custo=i.custo_por_unidade||i.cmv_medio||0;
+    const custo=i.cmv_medio||0;
+    const precoEmb=i.preco_embalagem||0;
     return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:6px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div style="font-weight:600;">${i.nome}</div>
-          <div style="font-size:12px;color:var(--text3);">Unidade: ${i.unidade||'—'}</div>
+          <div style="font-size:12px;color:var(--text3);">Unidade: ${i.unidade||'—'} · Emb: ${i.tamanho_ml||'—'}</div>
+          <div style="font-size:12px;color:var(--text3);">Custo/unidade: ${fmt(custo)} · Embalagem: ${fmt(precoEmb)}</div>
         </div>
-        <div style="font-weight:700;color:var(--orange);">${fmt(custo)}/un</div>
+        <div style="font-weight:700;color:var(--orange);">${fmt(custo)}</div>
       </div>
     </div>`;
   }).join('');
