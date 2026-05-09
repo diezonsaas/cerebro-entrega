@@ -1907,36 +1907,37 @@ async function toggleFicha(id){
 async function carregarFicha(id){
   const lista=document.getElementById(`ficha-lista-${id}`);
   const{data:itens,error}=await db.from('fichas_tecnicas')
-    .select('id, quantidade_gramas, insumos(nome, unidade, custo_por_unidade)')
+    .select('*, insumos(nome, unidade, custo_por_unidade)')
     .eq('produto_id',id)
     .order('created_at');
-
+  
   if(error){lista.innerHTML=`<div style="color:var(--red);font-size:12px;">Erro: ${error.message}</div>`;return;}
-
+  
   if(!itens||!itens.length){
     lista.innerHTML=`<div style="text-align:center;font-size:12px;color:var(--text3);padding:12px 0;">Nenhum ingrediente cadastrado.<br>Clique em + Ingrediente para começar.</div>`;
     return;
   }
 
-  // quantidade_gramas está sempre em gramas; custo_por_unidade é por kg ou por unidade
+  // Calcula custo de cada item baseado no insumo + quantidade
   const itensComCusto = itens.map(i=>{
     const ins = i.insumos || {};
     const qtd = parseFloat(i.quantidade_gramas) || 0;
     const preco = parseFloat(ins.custo_por_unidade) || 0;
-    const un = ins.unidade || 'kg';
+    const un = ins.unidade || 'g';
     let custo = 0;
-    let qtdLabel = qtd + 'g';
-
+    let qtdLabel = '';
+    
     if(un === 'kg'){
-      custo = (qtd / 1000) * preco;
-    } else if(un === 'unidade' || un === 'un'){
+      custo = (qtd/1000) * preco;
+      qtdLabel = qtd + 'g';
+    } else if(un === 'g'){
+      custo = qtd * preco;
+      qtdLabel = qtd + 'g';
+    } else {
       custo = qtd * preco;
       qtdLabel = qtd + 'un';
-    } else {
-      // fallback: trata como kg
-      custo = (qtd / 1000) * preco;
     }
-
+    
     return {
       id: i.id,
       nome: ins.nome || 'Sem nome',
@@ -2059,6 +2060,15 @@ function togglePrecos(id,cmv,tam){
   if(!aberto) renderPrecos(id,cmv,25,tam);
 }
 
+// Estado de entrega por plataforma (própria ou parceira) — persistido por produto
+const _entregaState={};
+
+function toggleEntrega(id,platIdx,cmv,margemAlvo,tam){
+  const key=`${id}_${platIdx}`;
+  _entregaState[key]=_entregaState[key]==='parceira'?'propria':'parceira';
+  renderPrecos(id,cmv,margemAlvo,tam);
+}
+
 function renderPrecos(id,cmv,margemAlvo,tam){
   // Atualiza botões de margem
   const btns=document.querySelectorAll(`#mg-btns-${id} button`);
@@ -2071,56 +2081,60 @@ function renderPrecos(id,cmv,margemAlvo,tam){
   });
 
   const mg=margemAlvo/100;
-  const CF=5.34; // custo fixo por pedido
+  const CF=5.34;
 
-  // Frete por tamanho: 330ml e 550ml = R$6, 770ml = R$7 (mais pesado, mais longe do custo médio)
   const tamStr=(tam||'').toString().toLowerCase();
   let freteBase=6.00;
   if(tamStr.includes('770')) freteBase=7.00;
   else if(tamStr.includes('550')) freteBase=6.50;
 
-  // Plataformas: {nome, taxa, frete, entrega}
+  // Plataformas com entrega padrão
   const PLATS=[
-    {nome:'iFood Raízes',        taxa:0.152, frete:freteBase, entrega:'própria'},
-    {nome:'99Food Raízes',       taxa:0.032, frete:freteBase, entrega:'própria'},
-    {nome:'iFood Vem do Norte',  taxa:0.302, frete:0,         entrega:'plataforma'},
-    {nome:'99Food Vem do Norte', taxa:0.032, frete:freteBase, entrega:'própria'},
+    {nome:'iFood Raízes',        taxa:0.152, entradaPadrao:'propria',  cor:'#E85C30'},
+    {nome:'99Food Raízes',       taxa:0.032, entradaPadrao:'propria',  cor:'#F5A623'},
+    {nome:'iFood Vem do Norte',  taxa:0.302, entradaPadrao:'parceira', cor:'#E85C30'},
+    {nome:'99Food Vem do Norte', taxa:0.032, entradaPadrao:'propria',  cor:'#F5A623'},
   ];
 
-  // Badge do tamanho
-  const tamBadge=tamStr?`<span style="background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-border);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;">${tam}</span>`:'';
+  const rows=PLATS.map((pl,idx)=>{
+    const key=`${id}_${idx}`;
+    // Usa estado salvo ou padrão da plataforma
+    const tipoEntrega=_entregaState[key]||pl.entradaPadrao;
+    const frete=tipoEntrega==='propria'?freteBase:0;
 
-  // Referência de CMVs pesados (do contexto real)
-  const CMV_REF={
-    '330ml':{'mix de frutas':6.02,'sonho de ninho':6.44,'brisa do norte':6.98,'três amores':8.35},
-    '550ml':{'avelinho':10.46},
-    '770ml':{'dois amores':14.96,'avelã crocante':14.00,'avelinho':14.49,'três amores':15.31},
-  };
-
-  const rows=PLATS.map(pl=>{
-    const custoTotal=cmv+CF+pl.frete;
+    const custoTotal=cmv+CF+frete;
     const divisor=1-pl.taxa-mg;
     const preco=divisor>0?custoTotal/divisor:0;
     const precoArred=Math.ceil(preco/0.10)*0.10;
-    const lucroReal=precoArred*(1-pl.taxa)-cmv-CF-pl.frete;
+    const lucroReal=precoArred*(1-pl.taxa)-cmv-CF-frete;
     const margemReal=precoArred>0?(lucroReal/precoArred)*100:0;
     const ok=margemReal>=(margemAlvo-2);
     const icone=margemReal>=margemAlvo?'✅':margemReal>=(margemAlvo-5)?'⚠️':'❌';
 
-    return`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);">${icone} ${pl.nome}</div>
-        <div style="font-size:11px;color:var(--text3);">taxa ${(pl.taxa*100).toFixed(1)}% · frete ${pl.frete>0?'R$'+pl.frete.toFixed(2).replace('.',','):'pela plataforma'}</div>
+    const btnLabel=tipoEntrega==='propria'?'🛵 Própria':'🏍️ Parceira';
+    const btnStyle=tipoEntrega==='propria'
+      ?'background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;'
+      :'background:#f0fdf4;color:#15803d;border:1px solid #86efac;';
+
+    return`<div style="padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">${icone} ${pl.nome}</div>
+          <div style="font-size:11px;color:var(--text3);">taxa ${(pl.taxa*100).toFixed(1)}% · ${frete>0?'frete R$'+frete.toFixed(2).replace('.',','):'sem frete (plataforma entrega)'}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:17px;font-weight:700;color:${ok?'var(--green)':'var(--amber)'};">R$${precoArred.toFixed(2).replace('.',',')}</div>
+          <div style="font-size:11px;color:var(--text3);">margem ${margemReal.toFixed(0)}%</div>
+        </div>
       </div>
-      <div style="text-align:right;">
-        <div style="font-size:17px;font-weight:700;color:${ok?'var(--green)':'var(--amber)'};">R$${precoArred.toFixed(2).replace('.',',')}</div>
-        <div style="font-size:11px;color:var(--text3);">margem ${margemReal.toFixed(0)}%</div>
+      <div style="margin-top:6px;">
+        <button onclick="toggleEntrega('${id}',${idx},${cmv},${margemAlvo},'${tam||''}')" style="${btnStyle}border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;">${btnLabel} — toque para alternar</button>
       </div>
     </div>`;
   }).join('');
 
   const custoInfo=`<div style="margin-top:10px;font-size:11px;color:var(--text2);line-height:1.7;padding:9px 10px;background:var(--orange-bg);border-radius:8px;border:1px solid var(--orange-border);">
-    💡 <strong>Base do cálculo:</strong> CMV R$${cmv.toFixed(2).replace('.',',')} + fixo R$5,34/pedido${freteBase>0?' + frete R$'+freteBase.toFixed(2).replace('.',','):''}
+    💡 <strong>Base do cálculo:</strong> CMV R$${cmv.toFixed(2).replace('.',',')} + fixo R$5,34/pedido
     &nbsp;·&nbsp; Fórmula: <em>(CMV + custos) ÷ (1 − taxa − margem)</em>
   </div>`;
 
