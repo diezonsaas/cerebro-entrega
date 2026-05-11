@@ -1817,6 +1817,23 @@ async function carregarAdminProdutos(){
                 <button onclick="renderPrecos('${p.id}',${cmv},30,'${tam||''}')" class="mg-btn" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2);">30%</button>
               </div>
             </div>
+            <!-- CONFIG DNA + TICKET -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;padding:8px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);">
+              <div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px;">DNA% (hoje 15,17%)</div>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <input id="dna-input-${p.id}" type="number" value="15.17" step="0.01" min="1" max="50" style="padding:5px 8px;font-size:13px;font-weight:700;width:70px;border-radius:6px;" oninput="renderPrecos('${p.id}',${cmv},getDNAMargem('${p.id}'),'${tam||''}')">
+                  <span style="font-size:12px;color:var(--text2);">%</span>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px;">Ticket médio</div>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <input id="ticket-input-${p.id}" type="number" value="35" step="1" min="10" style="padding:5px 8px;font-size:13px;font-weight:700;width:70px;border-radius:6px;" oninput="renderPrecos('${p.id}',${cmv},getDNAMargem('${p.id}'),'${tam||''}')">
+                  <span style="font-size:12px;color:var(--text2);">R$</span>
+                </div>
+              </div>
+            </div>
             <div id="tabela-precos-${p.id}"></div>
           </div>
           <!-- PAINEL FICHA TÉCNICA -->
@@ -2060,13 +2077,15 @@ function togglePrecos(id,cmv,tam){
   if(!aberto) renderPrecos(id,cmv,25,tam);
 }
 
-// Estado de entrega por plataforma (própria ou parceira) — persistido por produto
-const _entregaState={};
-
-function toggleEntrega(id,platIdx,cmv,margemAlvo,tam){
-  const key=`${id}_${platIdx}`;
-  _entregaState[key]=_entregaState[key]==='parceira'?'propria':'parceira';
-  renderPrecos(id,cmv,margemAlvo,tam);
+function getDNAMargem(id){
+  // Retorna a margem alvo atual (pelo botão ativo)
+  const btns=document.querySelectorAll(`#mg-btns-${id} .mg-btn`);
+  for(const b of btns){
+    if(b.style.background.includes('249')||b.style.background==='var(--orange)'){
+      return parseInt(b.textContent)||25;
+    }
+  }
+  return 25;
 }
 
 function renderPrecos(id,cmv,margemAlvo,tam){
@@ -2074,71 +2093,123 @@ function renderPrecos(id,cmv,margemAlvo,tam){
   const btns=document.querySelectorAll(`#mg-btns-${id} button`);
   btns.forEach(b=>{
     const bm=parseInt(b.textContent);
-    b.style.background=bm===margemAlvo?'var(--orange)':'var(--bg3)';
-    b.style.color=bm===margemAlvo?'#fff':'var(--text2)';
-    b.style.borderColor=bm===margemAlvo?'var(--orange)':'var(--border2)';
+    const ativo=bm===margemAlvo;
+    b.style.background=ativo?'var(--orange)':'var(--bg3)';
+    b.style.color=ativo?'#fff':'var(--text2)';
+    b.style.borderColor=ativo?'var(--orange)':'var(--border2)';
     b.setAttribute('onclick',`renderPrecos('${id}',${cmv},${bm},'${tam||''}')`);
   });
 
   const mg=margemAlvo/100;
-  const CF=5.34;
-
   const tamStr=(tam||'').toString().toLowerCase();
+
+  // DNA% — usa o input se existir, senão 15.17 (padrão do curso)
+  const dnaInput=document.getElementById(`dna-input-${id}`);
+  const DNA=(parseFloat(dnaInput?.value)||15.17)/100;
+
+  // Ticket médio — usa o input se existir, senão 35
+  const ticketInput=document.getElementById(`ticket-input-${id}`);
+  const TICKET=parseFloat(ticketInput?.value)||35;
+
+  // Frete motoboy por tamanho (entrega própria)
   let freteBase=6.00;
   if(tamStr.includes('770')) freteBase=7.00;
   else if(tamStr.includes('550')) freteBase=6.50;
 
-  // Plataformas com entrega padrão
+  // ===== FÓRMULA DO CURSO (DNA do Lucro — Magno Fernandes) =====
+  // PV direto = CMV ÷ (1 - DNA% - Lucro%)
+  // PI iFood  = (PV + entrega_proporcional) ÷ (1 - taxa_iFood)
+  // Entrega proporcional = frete_medio × (PV ÷ ticket_médio)
+  // Cardápio Fantasma quando PI > mercado: CMV ÷ (1 - (DNA% + 10%))
+
+  // Plataformas com tipo de entrega
   const PLATS=[
-    {nome:'iFood Raízes',        taxa:0.152, entradaPadrao:'propria',  cor:'#E85C30'},
-    {nome:'99Food Raízes',       taxa:0.032, entradaPadrao:'propria',  cor:'#F5A623'},
-    {nome:'iFood Vem do Norte',  taxa:0.302, entradaPadrao:'parceira', cor:'#E85C30'},
-    {nome:'99Food Vem do Norte', taxa:0.032, entradaPadrao:'propria',  cor:'#F5A623'},
+    {nome:'iFood Raízes',        taxa:0.152, propria:true,  cor:'#E85C30'},
+    {nome:'99Food Raízes',       taxa:0.032, propria:true,  cor:'#F5A623'},
+    {nome:'iFood Vem do Norte',  taxa:0.302, propria:false, cor:'#E85C30'},
+    {nome:'99Food Vem do Norte', taxa:0.032, propria:true,  cor:'#F5A623'},
   ];
 
-  const rows=PLATS.map((pl,idx)=>{
-    const key=`${id}_${idx}`;
-    // Usa estado salvo ou padrão da plataforma
-    const tipoEntrega=_entregaState[key]||pl.entradaPadrao;
-    const frete=tipoEntrega==='propria'?freteBase:0;
+  // PV direto (sem plataforma) — fórmula do curso aula 13
+  const pvDireto=cmv/(1-DNA-mg);
+  const pvArred=Math.ceil(pvDireto/0.10)*0.10;
 
-    const custoTotal=cmv+CF+frete;
-    const divisor=1-pl.taxa-mg;
-    const preco=divisor>0?custoTotal/divisor:0;
-    const precoArred=Math.ceil(preco/0.10)*0.10;
-    const lucroReal=precoArred*(1-pl.taxa)-cmv-CF-frete;
-    const margemReal=precoArred>0?(lucroReal/precoArred)*100:0;
-    const ok=margemReal>=(margemAlvo-2);
-    const icone=margemReal>=margemAlvo?'✅':margemReal>=(margemAlvo-5)?'⚠️':'❌';
+  const rows=PLATS.map(pl=>{
+    let html='';
 
-    const btnLabel=tipoEntrega==='propria'?'🛵 Própria':'🏍️ Parceira';
-    const btnStyle=tipoEntrega==='propria'
-      ?'background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;'
-      :'background:#f0fdf4;color:#15803d;border:1px solid #86efac;';
+    if(pl.propria){
+      // ENTREGA PRÓPRIA: inclui frete no cálculo
+      // PV com frete = (CMV + frete) ÷ (1 - DNA% - Lucro%)
+      const pvComFrete=(cmv+freteBase)/(1-DNA-mg);
+      const pi=(pvComFrete/((1-pl.taxa)));
+      const piArred=Math.ceil(pi/0.10)*0.10;
+      // Lucro real no piArred
+      const lucroR=piArred*(1-pl.taxa)-cmv-freteBase-(piArred*DNA);
+      const mgR=piArred>0?(lucroR/piArred)*100:0;
+      const ok=mgR>=(margemAlvo-2);
+      const icone=mgR>=margemAlvo?'✅':mgR>=(margemAlvo-5)?'⚠️':'❌';
 
-    return`<div style="padding:10px 0;border-bottom:1px solid var(--border);">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);">${icone} ${pl.nome}</div>
-          <div style="font-size:11px;color:var(--text3);">taxa ${(pl.taxa*100).toFixed(1)}% · ${frete>0?'frete R$'+frete.toFixed(2).replace('.',','):'sem frete (plataforma entrega)'}</div>
+      html=`<div style="padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">${icone} ${pl.nome}</div>
+            <div style="font-size:11px;color:var(--text3);">taxa ${(pl.taxa*100).toFixed(1)}% · motoboy R$${freteBase.toFixed(2).replace('.',',')} · entrega própria</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:17px;font-weight:700;color:${ok?'var(--green)':'var(--amber)'};">R$${piArred.toFixed(2).replace('.',',')}</div>
+            <div style="font-size:11px;color:var(--text3);">margem ${mgR.toFixed(0)}%</div>
+          </div>
         </div>
-        <div style="text-align:right;">
-          <div style="font-size:17px;font-weight:700;color:${ok?'var(--green)':'var(--amber)'};">R$${precoArred.toFixed(2).replace('.',',')}</div>
-          <div style="font-size:11px;color:var(--text3);">margem ${margemReal.toFixed(0)}%</div>
+      </div>`;
+    } else {
+      // ENTREGA PARCEIRA (iFood Vem do Norte): sem motoboy
+      // PI = (PV + entrega_proporcional) ÷ (1 - taxa)
+      // Entrega proporcional = frete_medio × (PV ÷ ticket_médio)  — aula 14 e 16
+      const freteEntrega=freteBase; // custo médio de entrega da plataforma
+      const entrProp=freteEntrega*(pvArred/TICKET);
+      const pi=(pvArred+entrProp)/(1-pl.taxa);
+      const piArred=Math.ceil(pi/0.10)*0.10;
+      const lucroR=piArred*(1-pl.taxa)-cmv-(piArred*DNA);
+      const mgR=piArred>0?(lucroR/piArred)*100:0;
+      const ok=mgR>=(margemAlvo-2);
+      const icone=mgR>=margemAlvo?'✅':mgR>=(margemAlvo-5)?'⚠️':'❌';
+
+      // Cardápio Fantasma — quando PI inviável (> 1.5× PV direto)
+      const inviavel=piArred>(pvArred*1.5);
+      const pvFantasma=cmv/(1-DNA-0.10); // lucro mínimo 10% — aula 15
+      const entrPropF=freteEntrega*(pvFantasma/TICKET);
+      const piFantasma=(pvFantasma+entrPropF)/(1-pl.taxa);
+      const piFantArred=Math.ceil(piFantasma/0.10)*0.10;
+
+      html=`<div style="padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">${icone} ${pl.nome}</div>
+            <div style="font-size:11px;color:var(--text3);">taxa ${(pl.taxa*100).toFixed(1)}% · frete pela plataforma · entr. prop. R$${entrProp.toFixed(2).replace('.',',')}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:17px;font-weight:700;color:${ok?'var(--green)':'var(--amber)'};">R$${piArred.toFixed(2).replace('.',',')}</div>
+            <div style="font-size:11px;color:var(--text3);">margem ${mgR.toFixed(0)}%</div>
+          </div>
         </div>
-      </div>
-      <div style="margin-top:6px;">
-        <button onclick="toggleEntrega('${id}',${idx},${cmv},${margemAlvo},'${tam||''}')" style="${btnStyle}border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;">${btnLabel} — toque para alternar</button>
-      </div>
-    </div>`;
+        ${inviavel?`<div style="margin-top:8px;padding:8px 10px;background:rgba(37,99,235,0.06);border:1px solid rgba(37,99,235,0.15);border-radius:8px;">
+          <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:2px;">👻 Cardápio Fantasma sugerido</div>
+          <div style="font-size:11px;color:var(--text2);">Produto exclusivo com 10% de margem mínima → <strong>R$${piFantArred.toFixed(2).replace('.',',')}</strong> no iFood</div>
+        </div>`:''}
+      </div>`;
+    }
+    return html;
   }).join('');
 
-  const custoInfo=`<div style="margin-top:10px;font-size:11px;color:var(--text2);line-height:1.7;padding:9px 10px;background:var(--orange-bg);border-radius:8px;border:1px solid var(--orange-border);">
-    💡 <strong>Base do cálculo:</strong> CMV R$${cmv.toFixed(2).replace('.',',')} + fixo R$5,34/pedido
-    &nbsp;·&nbsp; Fórmula: <em>(CMV + custos) ÷ (1 − taxa − margem)</em>
+  // Resumo base do cálculo
+  const info=`<div style="margin-top:10px;padding:10px;background:var(--orange-bg);border-radius:8px;border:1px solid var(--orange-border);font-size:11px;color:var(--text2);line-height:1.8;">
+    <div style="font-weight:700;margin-bottom:4px;">📐 Base do cálculo (DNA do Lucro)</div>
+    <div>CMV: <strong>R$${cmv.toFixed(2).replace('.',',')}</strong> · DNA: <strong>${(DNA*100).toFixed(2)}%</strong> · Lucro alvo: <strong>${margemAlvo}%</strong></div>
+    <div>PV direto (balcão): <strong>R$${pvArred.toFixed(2).replace('.',',')}</strong> · Ticket médio: <strong>R$${TICKET.toFixed(0)}</strong></div>
+    <div style="margin-top:4px;color:var(--text3);font-style:italic;">Fórmula: CMV ÷ (1 − DNA% − Lucro%) → depois aplica taxa da plataforma</div>
   </div>`;
 
-  document.getElementById(`tabela-precos-${id}`).innerHTML=rows+custoInfo;
+  document.getElementById(`tabela-precos-${id}`).innerHTML=rows+info;
 }
 
 async function salvarProduto(id){
